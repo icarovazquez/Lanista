@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../../../core/theme/app_colors.dart';
 import '../../../../../../core/localization/app_localizations.dart';
+import '../../../../messaging/presentation/pages/conversations_page.dart';
 
 class CoachDashboardPage extends StatefulWidget {
   const CoachDashboardPage({super.key});
@@ -34,12 +35,12 @@ class _CoachDashboardPageState extends State<CoachDashboardPage> {
     } catch (_) {}
   }
 
-  final List<Widget> _pages = const [
-    _CoachHomeTab(),
-    _CoachRosterMapTab(),
-    _CoachPipelineTab(),
-    _CoachSearchTab(),
-    _CoachMessagesTab(),
+  List<Widget> get _pages => [
+    const _CoachHomeTab(),
+    const _CoachRosterMapTab(),
+    const _CoachPipelineTab(),
+    const _CoachSearchTab(),
+    const ConversationsPage(),
   ];
 
   @override
@@ -301,17 +302,3 @@ class _CoachSearchTab extends StatelessWidget {
   }
 }
 
-class _CoachMessagesTab extends StatelessWidget {
-  const _CoachMessagesTab();
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Text('💬', style: TextStyle(fontSize: 64)),
-      SizedBox(height: 16),
-      Text('Messages', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-      SizedBox(height: 8),
-      Text('Your conversations with\nprospective players will appear here.',
-          textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary)),
-    ]));
-  }
-}

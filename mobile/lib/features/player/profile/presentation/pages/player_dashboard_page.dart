@@ -5,6 +5,7 @@ import '../../../../../../core/theme/app_colors.dart';
 import '../../../../../../core/localization/app_localizations.dart';
 import '../../../roadmap/presentation/pages/player_roadmap_page.dart';
 import '../../../matches/presentation/pages/player_matches_page.dart';
+import '../../../../messaging/presentation/pages/conversations_page.dart';
 
 class PlayerDashboardPage extends StatefulWidget {
   const PlayerDashboardPage({super.key});
@@ -43,7 +44,7 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
     const PlayerMatchesPage(),
     const PlayerRoadmapPage(),
     const _PlayerSearchTab(),
-    const _PlayerMessagesTab(),
+    const ConversationsPage(),
   ];
 
   @override
@@ -306,19 +307,25 @@ class _PlayerHomeTab extends StatelessWidget {
           _EducationCard(
             title: 'The State of College Soccer Recruiting in 2026',
             readTime: '5 min read',
-            onTap: () {},
+            onTap: () => context.push('/education/e1'),
           ),
           const SizedBox(height: 8),
           _EducationCard(
             title: 'D1 vs D2 vs D3: Which Is Right for You?',
             readTime: '4 min read',
-            onTap: () {},
+            onTap: () => context.push('/education/e2'),
           ),
           const SizedBox(height: 8),
           _EducationCard(
             title: 'ID Camps: Genuine or Just a Money Grab?',
             readTime: '6 min read',
-            onTap: () {},
+            onTap: () => context.push('/education/e3'),
+          ),
+          const SizedBox(height: 8),
+          _EducationCard(
+            title: 'See all articles →',
+            readTime: 'Education hub',
+            onTap: () => context.push('/education'),
           ),
         ],
       ),
@@ -469,29 +476,3 @@ class _PlayerSearchTab extends StatelessWidget {
   }
 }
 
-class _PlayerMessagesTab extends StatelessWidget {
-  const _PlayerMessagesTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('💬', style: TextStyle(fontSize: 64)),
-          SizedBox(height: 16),
-          Text(
-            'Messages',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Your conversations with\ncollege coaches will appear here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}

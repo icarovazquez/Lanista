@@ -11,6 +11,9 @@ import '../../features/coach/roster_map/presentation/pages/coach_dashboard_page.
 import '../../features/coach/tactical_blueprint/presentation/pages/tactical_blueprint_page.dart';
 import '../../features/parent/companion/presentation/pages/parent_dashboard_page.dart';
 import '../../features/mentor/dashboard/presentation/pages/mentor_dashboard_page.dart';
+import '../../features/education/presentation/pages/education_page.dart';
+import '../../features/education/presentation/widgets/article_detail_page.dart';
+import '../../features/education/data/education_articles.dart';
 
 class AppRouter {
   static final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -78,6 +81,22 @@ class AppRouter {
       GoRoute(
         path: '/mentor/dashboard',
         builder: (context, state) => const MentorDashboardPage(),
+      ),
+
+      // ── Education Routes ───────────────────────────────────────────────────
+      GoRoute(
+        path: '/education',
+        builder: (context, state) => const EducationPage(),
+      ),
+      GoRoute(
+        path: '/education/:articleId',
+        builder: (context, state) {
+          final articleId = state.pathParameters['articleId']!;
+          final article = EducationData.articles
+              .firstWhere((a) => a.id == articleId,
+                  orElse: () => EducationData.articles.first);
+          return ArticleDetailPage(article: article);
+        },
       ),
     ],
   );
