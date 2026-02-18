@@ -15,22 +15,38 @@ import '../../features/education/presentation/pages/education_page.dart';
 import '../../features/education/presentation/widgets/article_detail_page.dart';
 import '../../features/education/data/education_articles.dart';
 
+/// Notifier that listens to Supabase auth state changes and notifies GoRouter.
+class SupabaseAuthNotifier extends ChangeNotifier {
+  SupabaseAuthNotifier() {
+    Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+      notifyListeners();
+    });
+  }
+}
+
 class AppRouter {
   static final _rootNavigatorKey = GlobalKey<NavigatorState>();
+  static final _authNotifier = SupabaseAuthNotifier();
 
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
+    refreshListenable: _authNotifier,
     redirect: (context, state) {
       final session = Supabase.instance.client.auth.currentSession;
       final isLoggedIn = session != null;
-      final isAuthRoute = state.matchedLocation.startsWith('/auth') ||
-          state.matchedLocation == '/splash';
+      final loc = state.matchedLocation;
 
-      if (!isLoggedIn && !isAuthRoute) return '/auth/login';
-      if (isLoggedIn && state.matchedLocation == '/auth/login') {
-        return '/splash'; // Let splash handle role-based redirect
-      }
+      // Routes that don't require auth
+      final isPublicRoute = loc.startsWith('/auth') || loc == '/splash';
+
+      // Not logged in trying to access protected route → login
+      if (!isLoggedIn && !isPublicRoute) return '/auth/login';
+
+      // Logged in on login page → go to splash to determine dashboard
+      if (isLoggedIn && loc == '/auth/login') return '/splash';
+
+      // Already logged in, don't redirect role-selection or any other auth route
       return null;
     },
     routes: [

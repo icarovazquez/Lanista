@@ -20,19 +20,64 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
     if (_selectedRole == null) return;
     setState(() => _isLoading = true);
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      final userMeta =
-          Supabase.instance.client.auth.currentUser!.userMetadata ?? {};
+      final client = Supabase.instance.client;
+      final currentUser = client.auth.currentUser;
 
-      await Supabase.instance.client.from('users').upsert({
-        'id': userId,
-        'email': Supabase.instance.client.auth.currentUser!.email,
-        'role': _selectedRole!.name,
-        'first_name': userMeta['first_name'] ?? '',
-        'last_name': userMeta['last_name'] ?? '',
-        'language': 'en',
-        'is_active': true,
-      }, onConflict: 'id');
+      // Guard: if session was lost, redirect to login
+      if (currentUser == null) {
+        if (mounted) context.go('/auth/login');
+        return;
+      }
+
+      final userId = currentUser.id;
+      final userEmail = currentUser.email ?? '';
+      final userMeta = currentUser.userMetadata ?? {};
+      final firstName = (userMeta['first_name'] as String?) ?? '';
+      final lastName = (userMeta['last_name'] as String?) ?? '';
+
+      debugPrint('=== ROLE SELECT: userId=$userId role=${_selectedRole!.name}');
+
+      // Try UPDATE first (row likely exists from auth trigger).
+      // If it doesn't exist yet, fall back to INSERT.
+      List<Map<String, dynamic>> updateRes = [];
+      try {
+        updateRes = await client
+            .from('users')
+            .update({
+              'role': _selectedRole!.name,
+              'first_name': firstName,
+              'last_name': lastName,
+              'language': 'en',
+              'is_active': true,
+            })
+            .eq('id', userId)
+            .select('id');
+        debugPrint('=== UPDATE result: $updateRes');
+      } catch (updateErr) {
+        debugPrint('=== UPDATE error: $updateErr');
+        // If update fails, try insert
+      }
+
+      if (updateRes.isEmpty) {
+        debugPrint('=== Trying INSERT...');
+        try {
+          await client.from('users').insert({
+            'id': userId,
+            'email': userEmail,
+            'role': _selectedRole!.name,
+            'first_name': firstName,
+            'last_name': lastName,
+            'language': 'en',
+            'is_active': true,
+          });
+          debugPrint('=== INSERT done');
+        } catch (insertErr) {
+          debugPrint('=== INSERT error: $insertErr');
+          // Row likely already exists, continue anyway
+        }
+      }
+
+      debugPrint('=== Navigating to dashboard...');
 
       if (!mounted) return;
       switch (_selectedRole!) {
@@ -70,7 +115,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
     final theme = Theme.of(context);
 
     return Scaffold(
