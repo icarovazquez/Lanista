@@ -42,17 +42,18 @@ class _SplashPageState extends State<SplashPage>
       try {
         final user = await Supabase.instance.client
             .from('users')
-            .select('role')
+            .select('role, onboarding_complete')
             .eq('id', session.user.id)
             .single();
         final role = user['role'] as String;
+        final onboardingComplete = user['onboarding_complete'] as bool? ?? false;
         if (!mounted) return;
         switch (role) {
           case 'player':
-            context.go('/player/dashboard');
+            context.go(onboardingComplete ? '/player/dashboard' : '/player/profile/setup');
             break;
           case 'coach':
-            context.go('/coach/dashboard');
+            context.go(onboardingComplete ? '/coach/dashboard' : '/coach/tactical-blueprint');
             break;
           case 'parent':
             context.go('/parent/dashboard');

@@ -82,10 +82,12 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
       if (!mounted) return;
       switch (_selectedRole!) {
         case UserRole.player:
-          context.go('/player/dashboard');
+          // New players go through profile setup first
+          context.go('/player/profile/setup');
           break;
         case UserRole.coach:
-          context.go('/coach/dashboard');
+          // New coaches go through tactical blueprint first
+          context.go('/coach/tactical-blueprint');
           break;
         case UserRole.parent:
           context.go('/parent/dashboard');
