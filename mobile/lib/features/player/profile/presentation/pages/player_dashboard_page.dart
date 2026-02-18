@@ -6,6 +6,7 @@ import '../../../../../../core/localization/app_localizations.dart';
 import '../../../roadmap/presentation/pages/player_roadmap_page.dart';
 import '../../../matches/presentation/pages/player_matches_page.dart';
 import '../../../../messaging/presentation/pages/conversations_page.dart';
+import '../../../search/presentation/pages/player_search_page.dart';
 
 class PlayerDashboardPage extends StatefulWidget {
   const PlayerDashboardPage({super.key});
@@ -43,7 +44,7 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
     const _PlayerHomeTab(),
     const PlayerMatchesPage(),
     const PlayerRoadmapPage(),
-    const _PlayerSearchTab(),
+    const PlayerSearchPage(),
     const ConversationsPage(),
   ];
 
@@ -449,30 +450,4 @@ class _EducationCard extends StatelessWidget {
   }
 }
 
-class _PlayerSearchTab extends StatelessWidget {
-  const _PlayerSearchTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('🔍', style: TextStyle(fontSize: 64)),
-          SizedBox(height: 16),
-          Text(
-            'Search Programs',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Search for college programs\nby division, location, and more.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
 

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../../../core/theme/app_colors.dart';
 import '../../../../../../core/localization/app_localizations.dart';
 import '../../../../messaging/presentation/pages/conversations_page.dart';
+import '../../../search/presentation/pages/coach_search_page.dart';
 
 class CoachDashboardPage extends StatefulWidget {
   const CoachDashboardPage({super.key});
@@ -39,7 +40,7 @@ class _CoachDashboardPageState extends State<CoachDashboardPage> {
     const _CoachHomeTab(),
     const _CoachRosterMapTab(),
     const _CoachPipelineTab(),
-    const _CoachSearchTab(),
+    const CoachSearchPage(),
     const ConversationsPage(),
   ];
 
@@ -287,18 +288,4 @@ class _CoachPipelineTab extends StatelessWidget {
   }
 }
 
-class _CoachSearchTab extends StatelessWidget {
-  const _CoachSearchTab();
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Text('🔍', style: TextStyle(fontSize: 64)),
-      SizedBox(height: 16),
-      Text('Search Players', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-      SizedBox(height: 8),
-      Text('Search players by position, grade,\nleague, GPA, and more.',
-          textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary)),
-    ]));
-  }
-}
 
