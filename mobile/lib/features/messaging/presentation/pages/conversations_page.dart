@@ -66,7 +66,7 @@ class _ConversationsPageState extends State<ConversationsPage> {
             .from('conversations')
             .select('''
               id,
-              contact_window_valid,
+              contact_window_open,
               created_at,
               coaches!inner(
                 id,
@@ -75,10 +75,10 @@ class _ConversationsPageState extends State<ConversationsPage> {
                 users!inner(first_name, last_name)
               ),
               messages(
-                content,
+                body,
                 created_at,
                 sender_id,
-                is_read
+                read_at
               )
             ''')
             .eq('player_id', userId)
@@ -89,17 +89,17 @@ class _ConversationsPageState extends State<ConversationsPage> {
             .from('conversations')
             .select('''
               id,
-              contact_window_valid,
+              contact_window_open,
               created_at,
               players!inner(
                 user_id,
                 users!inner(first_name, last_name)
               ),
               messages(
-                content,
+                body,
                 created_at,
                 sender_id,
-                is_read
+                read_at
               )
             ''')
             .order('created_at', ascending: false);
@@ -269,9 +269,9 @@ class _ConversationTile extends StatelessWidget {
       return bTime.compareTo(aTime);
     });
     final latestMsg = messages.isNotEmpty ? messages.first : null;
-    final latestContent = latestMsg?['content'] as String? ?? 'Start the conversation...';
-    final isRead = latestMsg?['is_read'] as bool? ?? true;
-    final isContactValid = conversation['contact_window_valid'] as bool? ?? true;
+    final latestContent = latestMsg?['body'] as String? ?? 'Start the conversation...';
+    final isRead = latestMsg?['read_at'] != null;
+    final isContactValid = conversation['contact_window_open'] as bool? ?? true;
 
     return ListTile(
       onTap: onTap,
