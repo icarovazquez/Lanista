@@ -7,6 +7,7 @@ import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/auth/presentation/pages/role_selection_page.dart';
 import '../../features/player/profile/presentation/pages/player_dashboard_page.dart';
 import '../../features/player/profile/presentation/pages/player_profile_setup_page.dart';
+import '../../features/player/profile/presentation/pages/player_profile_page.dart';
 import '../../features/coach/roster_map/presentation/pages/coach_dashboard_page.dart';
 import '../../features/coach/tactical_blueprint/presentation/pages/tactical_blueprint_page.dart';
 import '../../features/parent/companion/presentation/pages/parent_dashboard_page.dart';
@@ -71,6 +72,10 @@ class AppRouter {
       GoRoute(
         path: '/player/dashboard',
         builder: (context, state) => const PlayerDashboardPage(),
+      ),
+      GoRoute(
+        path: '/player/profile',
+        builder: (context, state) => const PlayerProfilePage(),
       ),
       GoRoute(
         path: '/player/profile/setup',

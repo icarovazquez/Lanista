@@ -25,23 +25,28 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
     _loadUser();
   }
 
+  bool _onboardingComplete = false;
+
   Future<void> _loadUser() async {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
       final data = await Supabase.instance.client
           .from('users')
-          .select('first_name')
+          .select('first_name, onboarding_complete')
           .eq('id', userId)
           .single();
       if (mounted) {
-        setState(() => _firstName = data['first_name'] ?? '');
+        setState(() {
+          _firstName = data['first_name'] ?? '';
+          _onboardingComplete = data['onboarding_complete'] as bool? ?? false;
+        });
       }
     } catch (_) {}
   }
 
   List<Widget> get _pages => [
-    const _PlayerHomeTab(),
+    _PlayerHomeTab(onboardingComplete: _onboardingComplete, firstName: _firstName),
     const PlayerMatchesPage(),
     const PlayerRoadmapPage(),
     const PlayerSearchPage(),
@@ -160,7 +165,10 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
             ListTile(
               leading: const Icon(Icons.person_outline),
               title: const Text('My Profile'),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/player/profile');
+              },
             ),
             ListTile(
               leading: const Icon(Icons.settings_outlined),
@@ -184,7 +192,12 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
 }
 
 class _PlayerHomeTab extends StatelessWidget {
-  const _PlayerHomeTab();
+  final bool onboardingComplete;
+  final String firstName;
+  const _PlayerHomeTab({
+    this.onboardingComplete = false,
+    this.firstName = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -208,18 +221,22 @@ class _PlayerHomeTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Welcome to Lanista! 👋',
-                  style: TextStyle(
+                Text(
+                  onboardingComplete && firstName.isNotEmpty
+                      ? 'Welcome back, $firstName! 👋'
+                      : 'Welcome to Lanista! 👋',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Complete your profile to get matched with college programs.',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                Text(
+                  onboardingComplete
+                      ? 'Your profile is live. Coaches can discover you now.'
+                      : 'Complete your profile to get matched with college programs.',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
@@ -231,9 +248,15 @@ class _PlayerHomeTab extends StatelessWidget {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10)),
                   ),
-                  onPressed: () => context.push('/player/profile/setup'),
-                  child: const Text('Complete Profile',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  onPressed: () => context.push(
+                    onboardingComplete
+                        ? '/player/profile'
+                        : '/player/profile/setup',
+                  ),
+                  child: Text(
+                    onboardingComplete ? 'View Profile' : 'Complete Profile',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
             ),
