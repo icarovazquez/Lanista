@@ -442,60 +442,6 @@ class _EducationCard extends StatelessWidget {
   }
 }
 
-class _PlayerMatchesTab extends StatelessWidget {
-  const _PlayerMatchesTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('🎯', style: TextStyle(fontSize: 64)),
-          SizedBox(height: 16),
-          Text(
-            'Program Matches',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Complete your profile to see\nprograms matched to your style.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlayerRoadmapTab extends StatelessWidget {
-  const _PlayerRoadmapTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('🗺️', style: TextStyle(fontSize: 64)),
-          SizedBox(height: 16),
-          Text(
-            'Your Roadmap',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Add a target school to generate\nyour personalized development plan.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _PlayerSearchTab extends StatelessWidget {
   const _PlayerSearchTab();
 

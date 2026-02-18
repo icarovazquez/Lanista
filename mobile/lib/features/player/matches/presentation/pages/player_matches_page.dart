@@ -15,6 +15,7 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
   List<Map<String, dynamic>> _matches = [];
   bool _isLoading = true;
   bool _isRunningEngine = false;
+  // ignore: unused_field
   String? _errorMessage;
 
   @override
