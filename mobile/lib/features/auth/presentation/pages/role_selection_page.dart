@@ -32,7 +32,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
         'last_name': userMeta['last_name'] ?? '',
         'language': 'en',
         'is_active': true,
-      });
+      }, onConflict: 'id');
 
       if (!mounted) return;
       switch (_selectedRole!) {
@@ -52,10 +52,15 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
           context.go('/player/dashboard');
           break;
       }
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('Role selection error: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            duration: const Duration(seconds: 8),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {
