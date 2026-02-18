@@ -23,21 +23,28 @@ class _CoachDashboardPageState extends State<CoachDashboardPage> {
     _loadUser();
   }
 
+  bool _onboardingComplete = false;
+
   Future<void> _loadUser() async {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
       final data = await Supabase.instance.client
           .from('users')
-          .select('first_name')
+          .select('first_name, onboarding_complete')
           .eq('id', userId)
           .single();
-      if (mounted) setState(() => _firstName = data['first_name'] ?? '');
+      if (mounted) {
+        setState(() {
+          _firstName = data['first_name'] ?? '';
+          _onboardingComplete = data['onboarding_complete'] as bool? ?? false;
+        });
+      }
     } catch (_) {}
   }
 
   List<Widget> get _pages => [
-    const _CoachHomeTab(),
+    _CoachHomeTab(onboardingComplete: _onboardingComplete, firstName: _firstName),
     const _CoachRosterMapTab(),
     const _CoachPipelineTab(),
     const CoachSearchPage(),
@@ -157,7 +164,12 @@ class _CoachDashboardPageState extends State<CoachDashboardPage> {
 }
 
 class _CoachHomeTab extends StatelessWidget {
-  const _CoachHomeTab();
+  final bool onboardingComplete;
+  final String firstName;
+  const _CoachHomeTab({
+    this.onboardingComplete = false,
+    this.firstName = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -179,12 +191,20 @@ class _CoachHomeTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Welcome, Coach! 📋',
-                    style: TextStyle(color: Colors.white, fontSize: 20,
-                        fontWeight: FontWeight.w700)),
+                Text(
+                  onboardingComplete && firstName.isNotEmpty
+                      ? 'Welcome back, $firstName! 📋'
+                      : 'Welcome, Coach! 📋',
+                  style: const TextStyle(color: Colors.white, fontSize: 20,
+                      fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 8),
-                const Text('Set up your tactical blueprint and roster map\nto start finding your next recruits.',
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                Text(
+                  onboardingComplete
+                      ? 'Your blueprint is live. The matching engine is finding players for you.'
+                      : 'Set up your tactical blueprint and roster map\nto start finding your next recruits.',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -195,8 +215,10 @@ class _CoachHomeTab extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   onPressed: () => context.push('/coach/tactical-blueprint'),
-                  child: const Text('Setup Tactical Blueprint',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  child: Text(
+                    onboardingComplete ? 'Edit Blueprint' : 'Setup Tactical Blueprint',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
             ),

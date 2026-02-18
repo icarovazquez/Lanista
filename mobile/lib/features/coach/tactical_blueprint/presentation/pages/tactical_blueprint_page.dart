@@ -82,38 +82,45 @@ class _TacticalBlueprintPageState extends State<TacticalBlueprintPage> {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
 
-      // Upsert coach profile
+      // Upsert coach profile — column names match migrations 010 + 015
       final coachResult = await Supabase.instance.client.from('coaches').upsert({
         'user_id': userId,
         'school_name': _schoolCtrl.text.trim().isEmpty ? null : _schoolCtrl.text.trim(),
-        'primary_formation_id': _selectedFormation,
-        'recruiting_class_years': _targetRecruitYears,
-      }).select('id').single();
+        'primary_formation': _selectedFormation,          // TEXT column (migration 010)
+        'playing_styles': _selectedStyles.isNotEmpty ? _selectedStyles : null,
+        'recruiting_class_years': _targetRecruitYears.isNotEmpty ? _targetRecruitYears : null,
+        'recruiting_notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        'onboarding_complete': true,
+      }, onConflict: 'user_id').select('id').single();
 
       final coachId = coachResult['id'] as String;
 
-      // Save position requirements
+      // Save position requirements using TEXT position_key (migration 015)
       for (final entry in _positionQualities.entries) {
         if (entry.value.isNotEmpty) {
           await Supabase.instance.client.from('coach_position_requirements').upsert({
             'coach_id': coachId,
-            'position_id': entry.key,
+            'position_key': entry.key,       // TEXT, not UUID FK
             'required_qualities': entry.value,
             'is_published': true,
           });
         }
       }
 
-      // Save roster slots
+      // Save roster slots using TEXT position_key + graduation_year (migration 015)
       for (final entry in _rosterSlots.entries) {
         await Supabase.instance.client.from('roster_slots').upsert({
           'coach_id': coachId,
-          'position_id': entry.key,
+          'position_key': entry.key,         // TEXT, not UUID FK
           'graduation_year': entry.value['graduation_year'],
           'slot_status': entry.value['needs_recruit'] == true ? 'open' : 'filled',
-          'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
         });
       }
+
+      // Mark users.onboarding_complete = true
+      await Supabase.instance.client.from('users').update({
+        'onboarding_complete': true,
+      }).eq('id', userId);
 
       if (mounted) context.go('/coach/dashboard');
     } catch (e) {
