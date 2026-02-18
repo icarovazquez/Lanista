@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../../../core/theme/app_colors.dart';
 import '../../../../../../core/localization/app_localizations.dart';
+import '../../../roadmap/presentation/pages/player_roadmap_page.dart';
+import '../../../matches/presentation/pages/player_matches_page.dart';
 
 class PlayerDashboardPage extends StatefulWidget {
   const PlayerDashboardPage({super.key});
@@ -38,8 +40,8 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
 
   List<Widget> get _pages => [
     const _PlayerHomeTab(),
-    const _PlayerMatchesTab(),
-    const _PlayerRoadmapTab(),
+    const PlayerMatchesPage(),
+    const PlayerRoadmapPage(),
     const _PlayerSearchTab(),
     const _PlayerMessagesTab(),
   ];
