@@ -5,6 +5,7 @@ import '../../../../../../core/theme/app_colors.dart';
 import '../../../../../../core/localization/app_localizations.dart';
 import '../../../../messaging/presentation/pages/conversations_page.dart';
 import '../../../search/presentation/pages/coach_search_page.dart';
+import '../../../matches/presentation/pages/coach_matches_page.dart';
 
 class CoachDashboardPage extends StatefulWidget {
   const CoachDashboardPage({super.key});
@@ -44,7 +45,12 @@ class _CoachDashboardPageState extends State<CoachDashboardPage> {
   }
 
   List<Widget> get _pages => [
-    _CoachHomeTab(onboardingComplete: _onboardingComplete, firstName: _firstName),
+    _CoachHomeTab(
+      onboardingComplete: _onboardingComplete,
+      firstName: _firstName,
+      onGoToMatches: () => setState(() => _currentIndex = 1),
+    ),
+    const CoachMatchesPage(),
     const _CoachRosterMapTab(),
     const _CoachPipelineTab(),
     const CoachSearchPage(),
@@ -108,6 +114,11 @@ class _CoachDashboardPageState extends State<CoachDashboardPage> {
             selectedIcon: Icon(Icons.home, color: AppColors.coachColor),
             label: 'Dashboard',
           ),
+          const NavigationDestination(
+            icon: Icon(Icons.auto_awesome_outlined),
+            selectedIcon: Icon(Icons.auto_awesome, color: AppColors.coachColor),
+            label: 'Matches',
+          ),
           NavigationDestination(
             icon: const Icon(Icons.grid_view_outlined),
             selectedIcon: const Icon(Icons.grid_view, color: AppColors.coachColor),
@@ -166,9 +177,11 @@ class _CoachDashboardPageState extends State<CoachDashboardPage> {
 class _CoachHomeTab extends StatelessWidget {
   final bool onboardingComplete;
   final String firstName;
+  final VoidCallback? onGoToMatches;
   const _CoachHomeTab({
     this.onboardingComplete = false,
     this.firstName = '',
+    this.onGoToMatches,
   });
 
   @override
@@ -232,8 +245,13 @@ class _CoachHomeTab extends StatelessWidget {
               Expanded(child: _CoachStatCard(label: 'Roster Gaps', value: '0',
                   icon: Icons.grid_view_outlined, color: AppColors.coachColor)),
               const SizedBox(width: 12),
-              Expanded(child: _CoachStatCard(label: 'Player Matches', value: '0',
-                  icon: Icons.people_outline, color: AppColors.primary)),
+              Expanded(child: _CoachStatCard(
+                label: 'Player Matches',
+                value: '—',
+                icon: Icons.auto_awesome_outlined,
+                color: AppColors.primary,
+                onTap: onGoToMatches,
+              )),
             ],
           ),
           const SizedBox(height: 12),
@@ -246,6 +264,51 @@ class _CoachHomeTab extends StatelessWidget {
                   icon: Icons.chat_bubble_outline, color: AppColors.mentorColor)),
             ],
           ),
+          if (onboardingComplete) ...[
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: onGoToMatches,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.coachColor.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: AppColors.coachColor.withValues(alpha: 0.2)),
+                ),
+                child: const Row(
+                  children: [
+                    Text('⚡', style: TextStyle(fontSize: 22)),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'View Blueprint Matches',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: AppColors.coachColor,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'See players ranked by position, graduation year, and GPA fit',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, color: AppColors.coachColor),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -257,25 +320,40 @@ class _CoachStatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
-  const _CoachStatCard({required this.label, required this.value,
-      required this.icon, required this.color});
+  const _CoachStatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 8),
+          Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: color)),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(child: Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
+              if (onTap != null)
+                Icon(Icons.arrow_forward_ios, size: 10, color: color.withValues(alpha: 0.6)),
+            ],
+          ),
+        ]),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: 22),
-        const SizedBox(height: 8),
-        Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: color)),
-        const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-      ]),
     );
   }
 }
