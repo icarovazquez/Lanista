@@ -92,26 +92,34 @@ class _PlayerProfileSetupPageState extends State<PlayerProfileSetupPage> {
         'onboarding_complete': true,
       }).eq('id', userId);
 
-      // Upsert player profile
+      // Map foot preference to DB CHECK values (left/right/both)
+      String? dominantFoot;
+      if (_footPreference == 'Right') dominantFoot = 'right';
+      else if (_footPreference == 'Left') dominantFoot = 'left';
+      else if (_footPreference != null) dominantFoot = 'both';
+
+      // Upsert player profile — column names match migration 011
       await Supabase.instance.client.from('players').upsert({
         'user_id': userId,
-        'grade_level': _selectedGrade != null ? int.tryParse(_selectedGrade!) : null,
+        'grade': _selectedGrade != null ? int.tryParse(_selectedGrade!) : null,
         'graduation_year': _selectedTimeline != null
             ? int.tryParse(_selectedTimeline!.replaceAll('Class of ', ''))
             : null,
-        'primary_position_id': _primaryPosition,
-        'secondary_position_id': _secondaryPosition,
-        'dominant_foot': _footPreference?.toLowerCase(),
-        'height_cm': _heightRange, // stored as range string until measured
-        'current_club': _clubNameCtrl.text.trim().isEmpty ? null : _clubNameCtrl.text.trim(),
-        'current_league': _selectedLeague,
-        'gpa_unweighted': _gpaRange,
+        'primary_position': _primaryPosition,
+        'secondary_position': _secondaryPosition,
+        'dominant_foot': dominantFoot,
+        // height_cm is INTEGER in DB — skip the range string, save null for now
+        'height_cm': null,
+        'club_name': _clubNameCtrl.text.trim().isEmpty ? null : _clubNameCtrl.text.trim(),
+        'league': _selectedLeague,
+        // gpa is NUMERIC(3,2) — skip range string, save null for now
+        'gpa': null,
         'sat_score': _satCtrl.text.trim().isEmpty ? null : int.tryParse(_satCtrl.text.trim()),
         'act_score': _actCtrl.text.trim().isEmpty ? null : int.tryParse(_actCtrl.text.trim()),
         'bio': _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
-        'target_division': _selectedDivisions.isNotEmpty ? _selectedDivisions.first : null,
+        'target_divisions': _selectedDivisions.isNotEmpty ? _selectedDivisions : null,
         'is_discoverable': true,
-      });
+      }, onConflict: 'user_id');
 
       if (mounted) context.go('/player/dashboard');
     } catch (e) {
