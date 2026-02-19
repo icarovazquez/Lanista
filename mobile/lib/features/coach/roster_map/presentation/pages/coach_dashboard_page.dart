@@ -6,6 +6,7 @@ import '../../../../../../core/localization/app_localizations.dart';
 import '../../../../messaging/presentation/pages/conversations_page.dart';
 import '../../../search/presentation/pages/coach_search_page.dart';
 import '../../../matches/presentation/pages/coach_matches_page.dart';
+import '../../../pipeline/presentation/pages/coach_pipeline_page.dart';
 
 class CoachDashboardPage extends StatefulWidget {
   const CoachDashboardPage({super.key});
@@ -52,7 +53,7 @@ class _CoachDashboardPageState extends State<CoachDashboardPage> {
     ),
     const CoachMatchesPage(),
     const _CoachRosterMapTab(),
-    const _CoachPipelineTab(),
+    const CoachPipelinePage(),
     const CoachSearchPage(),
     const ConversationsPage(),
   ];
@@ -373,19 +374,5 @@ class _CoachRosterMapTab extends StatelessWidget {
   }
 }
 
-class _CoachPipelineTab extends StatelessWidget {
-  const _CoachPipelineTab();
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Text('📈', style: TextStyle(fontSize: 64)),
-      SizedBox(height: 16),
-      Text('Recruiting Pipeline', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-      SizedBox(height: 8),
-      Text('Track prospects from identified\nto committed.',
-          textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary)),
-    ]));
-  }
-}
 
 

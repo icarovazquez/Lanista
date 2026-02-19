@@ -302,6 +302,7 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
                 (context, i) => _MatchCard(
                   player: excellent[i],
                   onContact: () => _contactPlayer(excellent[i]),
+                  onAddToPipeline: () => _addToPipeline(excellent[i]),
                 ),
                 childCount: excellent.length,
               ),
@@ -317,6 +318,7 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
                 (context, i) => _MatchCard(
                   player: strong[i],
                   onContact: () => _contactPlayer(strong[i]),
+                  onAddToPipeline: () => _addToPipeline(strong[i]),
                 ),
                 childCount: strong.length,
               ),
@@ -331,6 +333,7 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
                 (context, i) => _MatchCard(
                   player: good[i],
                   onContact: () => _contactPlayer(good[i]),
+                  onAddToPipeline: () => _addToPipeline(good[i]),
                 ),
                 childCount: good.length,
               ),
@@ -346,6 +349,7 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
                 (context, i) => _MatchCard(
                   player: possible[i],
                   onContact: () => _contactPlayer(possible[i]),
+                  onAddToPipeline: () => _addToPipeline(possible[i]),
                 ),
                 childCount: possible.length,
               ),
@@ -394,6 +398,57 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
         ),
       ),
     );
+  }
+
+  // ── Add to pipeline ────────────────────────────────────────────────────────
+
+  Future<void> _addToPipeline(Map<String, dynamic> match) async {
+    final coachUserId = _supabase.auth.currentUser?.id;
+    if (coachUserId == null) return;
+
+    try {
+      final coachData = await _supabase
+          .from('coaches')
+          .select('id')
+          .eq('user_id', coachUserId)
+          .maybeSingle();
+      if (coachData == null) return;
+      final coachId = coachData['id'] as String;
+
+      final playerUserId = match['player_user_id'] as String;
+      final playerRecord = await _supabase
+          .from('players')
+          .select('id')
+          .eq('user_id', playerUserId)
+          .maybeSingle();
+      if (playerRecord == null) return;
+      final playerId = playerRecord['id'] as String;
+
+      // Upsert — ignore if already in pipeline
+      await _supabase.from('recruiting_pipeline').upsert({
+        'coach_id': coachId,
+        'player_id': playerId,
+        'stage': 'identified',
+      }, onConflict: 'coach_id,player_id');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Added to Pipeline → Identified'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not add to pipeline: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   // ── Contact player ─────────────────────────────────────────────────────────
@@ -628,8 +683,13 @@ class _LegendRow extends StatelessWidget {
 class _MatchCard extends StatelessWidget {
   final Map<String, dynamic> player;
   final VoidCallback onContact;
+  final VoidCallback onAddToPipeline;
 
-  const _MatchCard({required this.player, required this.onContact});
+  const _MatchCard({
+    required this.player,
+    required this.onContact,
+    required this.onAddToPipeline,
+  });
 
   Color get _labelColor {
     switch (player['match_label'] as String?) {
@@ -842,21 +902,39 @@ class _MatchCard extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // ── Action button ───────────────────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                label: const Text('Contact Player'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.coachColor,
-                  side: const BorderSide(color: AppColors.coachColor),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+            // ── Action buttons ──────────────────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.add_chart_outlined, size: 16),
+                    label: const Text('Pipeline'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.secondary,
+                      side: const BorderSide(color: AppColors.secondary),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    onPressed: onAddToPipeline,
+                  ),
                 ),
-                onPressed: onContact,
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                    label: const Text('Contact'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.coachColor,
+                      side: const BorderSide(color: AppColors.coachColor),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    onPressed: onContact,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
