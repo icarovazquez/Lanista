@@ -561,11 +561,20 @@ class _CoachSearchPageState extends State<CoachSearchPage> {
       final playerUserId = (player['users'] as Map<String, dynamic>?)?['id'] as String?
           ?? player['user_id'] as String;
 
+      // Get the player's players.id (PK), not user_id
+      final playerRecord = await _supabase
+          .from('players')
+          .select('id')
+          .eq('user_id', playerUserId)
+          .maybeSingle();
+      if (playerRecord == null) return;
+      final playerId = playerRecord['id'] as String;
+
       // Check or create conversation
       final existing = await _supabase
           .from('conversations')
           .select('id')
-          .eq('player_id', playerUserId)
+          .eq('player_id', playerId)
           .eq('coach_id', coachId)
           .maybeSingle();
 
@@ -576,9 +585,10 @@ class _CoachSearchPageState extends State<CoachSearchPage> {
         final created = await _supabase
             .from('conversations')
             .insert({
-              'player_id': playerUserId,
+              'player_id': playerId,
               'coach_id': coachId,
               'contact_window_open': true,
+              'initiated_by': 'coach',
             })
             .select('id')
             .single();
