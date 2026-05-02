@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/localization/app_localizations.dart';
 import '../widgets/auth_text_field.dart';
@@ -22,14 +24,43 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
+  StreamSubscription<AuthState>? _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.signedIn && mounted) {
+        context.go('/splash');
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _signUpWithGoogle() async {
+    setState(() { _isLoading = true; _errorMessage = null; });
+    try {
+      await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'com.lanista.lanista://auth-callback/',
+        authScreenLaunchMode: LaunchMode.externalApplication,
+      );
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _errorMessage = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = 'Google sign-in failed');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _register() async {
@@ -188,7 +219,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 SocialAuthButton(
                   label: l10n.continueWithGoogle,
                   iconPath: 'assets/icons/google.png',
-                  onPressed: null,
+                  onPressed: _isLoading ? null : _signUpWithGoogle,
                 ),
                 const SizedBox(height: 32),
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../../../core/theme/app_colors.dart';
 import '../../../../messaging/presentation/pages/conversation_detail_page.dart';
+import 'coach_player_detail_page.dart';
 
 /// Coach's "Search Players" tab — search recruits by position, graduation year,
 /// GPA, league, foot preference, and division interest.
@@ -23,9 +24,56 @@ class _CoachSearchPageState extends State<CoachSearchPage> {
   String? _selectedFoot;
   String? _selectedLeague;
 
-  List<Map<String, dynamic>> _results = [];
+  List<Map<String, dynamic>> _allResults = [];
   bool _isLoading = false;
   bool _hasSearched = false;
+
+  List<Map<String, dynamic>> get _results {
+    var r = _allResults;
+    final keyword = _searchController.text.trim().toLowerCase();
+    if (keyword.isNotEmpty) {
+      r = r.where((p) {
+        final user = (p['users'] as Map<String, dynamic>?) ?? {};
+        final name = '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.toLowerCase();
+        final club = (p['club_name'] as String? ?? '').toLowerCase();
+        final league = (p['league'] as String? ?? '').toLowerCase();
+        return name.contains(keyword) || club.contains(keyword) || league.contains(keyword);
+      }).toList();
+    }
+    if (_selectedPosition != null) {
+      final pos = _selectedPosition!.toUpperCase();
+      r = r.where((p) {
+        final primary   = (p['primary_position']   as String? ?? '').toUpperCase();
+        final secondary = (p['secondary_position'] as String? ?? '').toUpperCase();
+        // Also check full positions list as fallback
+        final allPositions = (p['positions'] as List? ?? []);
+        final anyMatch = allPositions.any((pos2) =>
+          (pos2['abbreviation'] as String? ?? '').toUpperCase() == pos);
+        return primary == pos || secondary == pos || anyMatch;
+      }).toList();
+    }
+    if (_selectedGradYear != null) {
+      r = r.where((p) =>
+        p['graduation_year']?.toString() == _selectedGradYear).toList();
+    }
+    if (_selectedFoot != null) {
+      r = r.where((p) =>
+        (p['preferred_foot'] as String? ?? '').toLowerCase() ==
+        _selectedFoot!.toLowerCase()).toList();
+    }
+    if (_selectedLeague != null) {
+      r = r.where((p) =>
+        (p['league'] as String? ?? '').toLowerCase()
+        .contains(_selectedLeague!.toLowerCase())).toList();
+    }
+    if (_selectedGpa != null) {
+      r = r.where((p) {
+        final gpa = (p['gpa'] as num?)?.toDouble() ?? 0.0;
+        return _matchesGpaFilter(gpa, _selectedGpa!);
+      }).toList();
+    }
+    return r;
+  }
 
   static const _positions = [
     'GK', 'CB', 'RB', 'LB', 'CDM', 'CM', 'CAM', 'RM', 'LM', 'RW', 'LW', 'ST', 'CF',
@@ -50,70 +98,77 @@ class _CoachSearchPageState extends State<CoachSearchPage> {
     });
 
     try {
-      var query = _supabase.from('players').select('''
-        user_id,
-        primary_position,
-        secondary_position,
-        graduation_year,
-        gpa,
-        preferred_foot,
-        height_cm,
-        club_name,
-        league,
-        bio,
-        target_divisions,
-        users!inner(first_name, last_name, id)
-      ''');
+      // Fetch players, leagues, clubs, and player positions in parallel
+      final fetched = await Future.wait([
+        _supabase.from('players').select('''
+          id, user_id, graduation_year, gpa, dominant_foot,
+          height_cm, league_id, bio, target_division,
+          clubs(name)
+        ''').order('graduation_year', ascending: true).limit(200),
+        _supabase.from('leagues').select('id, name'),
+        _supabase.from('player_positions').select(
+          'player_id, is_primary, positions(abbreviation, position_type)',
+        ),
+      ]);
 
-      if (_selectedPosition != null) {
-        query = query.or(
-          'primary_position.eq.${_selectedPosition!},secondary_position.eq.${_selectedPosition!}',
-        );
+      final players = List<Map<String, dynamic>>.from(fetched[0] as List);
+      if (players.isEmpty) {
+        if (mounted) setState(() { _allResults = []; _isLoading = false; });
+        return;
       }
 
-      if (_selectedGradYear != null) {
-        query = query.eq('graduation_year', int.tryParse(_selectedGradYear!) ?? 0);
+      // League ID → name map
+      final leagueMap = <String, String>{
+        for (final l in (fetched[1] as List))
+          (l['id'] as String): (l['name'] as String),
+      };
+
+      // Player ID → positions list [{abbreviation, is_primary}]
+      final posMap = <String, List<Map<String, dynamic>>>{};
+      for (final pp in (fetched[2] as List)) {
+        final pid = pp['player_id'] as String;
+        final pos = (pp['positions'] as Map<String, dynamic>?) ?? {};
+        posMap.putIfAbsent(pid, () => []).add({
+          'abbreviation': pos['abbreviation'] as String? ?? '',
+          'position_type': pos['position_type'] as String? ?? '',
+          'is_primary': pp['is_primary'] as bool? ?? false,
+        });
       }
 
-      if (_selectedFoot != null) {
-        query = query.ilike('preferred_foot', _selectedFoot!);
-      }
+      // User ID → name map
+      final userIds = players.map((p) => p['user_id'] as String).toSet().toList();
+      final userData = await _supabase
+          .from('users').select('id, first_name, last_name')
+          .inFilter('id', userIds);
+      final userMap = <String, Map<String, dynamic>>{
+        for (final u in (userData as List))
+          (u['id'] as String): u as Map<String, dynamic>,
+      };
 
-      if (_selectedLeague != null) {
-        query = query.ilike('league', '%${_selectedLeague!}%');
-      }
-
-      final keyword = _searchController.text.trim();
-      if (keyword.isNotEmpty) {
-        // Search by name via users join — simplification: filter client-side
-      }
-
-      final data = await query.order('graduation_year', ascending: true).limit(50);
-
-      List<Map<String, dynamic>> results =
-          List<Map<String, dynamic>>.from(data as List);
-
-      // Client-side keyword filter on name
-      if (keyword.isNotEmpty) {
-        results = results.where((p) {
-          final user = (p['users'] as Map<String, dynamic>?) ?? {};
-          final name =
-              '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.toLowerCase();
-          return name.contains(keyword.toLowerCase());
-        }).toList();
-      }
-
-      // Client-side GPA filter
-      if (_selectedGpa != null) {
-        results = results.where((p) {
-          final gpa = (p['gpa'] as num?)?.toDouble() ?? 0.0;
-          return _matchesGpaFilter(gpa, _selectedGpa!);
-        }).toList();
-      }
+      // Merge everything into player records
+      final merged = players.map((p) {
+        final pid      = p['id'] as String;
+        final userId   = p['user_id'] as String? ?? '';
+        final leagueId = p['league_id'] as String? ?? '';
+        final positions = posMap[pid] ?? [];
+        final primary   = positions.where((x) => x['is_primary'] == true).firstOrNull;
+        final secondary = positions.where((x) => x['is_primary'] == false).firstOrNull;
+        final clubData  = p['clubs'] as Map<String, dynamic>?;
+        return {
+          ...p,
+          'users':             userMap[userId] ?? {},
+          'league':            leagueMap[leagueId] ?? '',
+          'club_name':         clubData?['name'] as String? ?? '',
+          'positions':         positions,
+          'primary_position':  (primary?['abbreviation']   ?? '').toString().toUpperCase(),
+          'secondary_position':(secondary?['abbreviation'] ?? '').toString().toUpperCase(),
+          'preferred_foot':    p['dominant_foot'] ?? '',
+        };
+      }).toList();
 
       if (mounted) {
         setState(() {
-          _results = results;
+          _allResults = merged;
           _isLoading = false;
         });
       }
@@ -154,19 +209,23 @@ class _CoachSearchPageState extends State<CoachSearchPage> {
       _selectedFoot = null;
       _selectedLeague = null;
       _searchController.clear();
-      _results = [];
+      _allResults = [];
       _hasSearched = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildSearchBar(),
-        _buildFilterRow(),
-        Expanded(child: _buildBody()),
-      ],
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          _buildSearchBar(),
+          _buildFilterRow(),
+          Expanded(child: _buildBody()),
+        ],
+      ),
     );
   }
 
@@ -180,13 +239,24 @@ class _CoachSearchPageState extends State<CoachSearchPage> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search players by name…',
+                hintText: 'Search by name, club, or league…',
                 hintStyle: const TextStyle(
                   fontSize: 13,
                   color: AppColors.textTertiary,
                 ),
                 prefixIcon:
                     const Icon(Icons.search, color: AppColors.textTertiary),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close, size: 18,
+                            color: AppColors.textTertiary),
+                        onPressed: () {
+                          _searchController.clear();
+                          FocusScope.of(context).unfocus();
+                          setState(() {});
+                        },
+                      )
+                    : null,
                 filled: true,
                 fillColor: AppColors.surfaceVariant,
                 border: OutlineInputBorder(
@@ -195,6 +265,7 @@ class _CoachSearchPageState extends State<CoachSearchPage> {
                 ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
+              onChanged: (_) => setState(() {}),
               onSubmitted: (_) => _search(),
             ),
           ),
@@ -358,6 +429,13 @@ class _CoachSearchPageState extends State<CoachSearchPage> {
             itemCount: _results.length,
             itemBuilder: (context, index) => _PlayerCard(
               player: _results[index],
+              onViewProfile: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => CoachPlayerDetailPage(
+                    playerId: _results[index]['id'] as String,
+                  ),
+                ),
+              ),
               onContact: () => _contactPlayer(_results[index]),
             ),
           ),
@@ -587,7 +665,7 @@ class _CoachSearchPageState extends State<CoachSearchPage> {
             .insert({
               'player_id': playerId,
               'coach_id': coachId,
-              'contact_window_open': true,
+              'contact_window_valid': true,
               'initiated_by': 'coach',
             })
             .select('id')
@@ -766,8 +844,13 @@ class _QuickSearchChip extends StatelessWidget {
 class _PlayerCard extends StatelessWidget {
   final Map<String, dynamic> player;
   final VoidCallback onContact;
+  final VoidCallback onViewProfile;
 
-  const _PlayerCard({required this.player, required this.onContact});
+  const _PlayerCard({
+    required this.player,
+    required this.onContact,
+    required this.onViewProfile,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -783,7 +866,9 @@ class _PlayerCard extends StatelessWidget {
     final league = player['league'] as String? ?? '';
     final bio = player['bio'] as String? ?? '';
 
-    return Container(
+    return GestureDetector(
+      onTap: onViewProfile,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -896,11 +981,26 @@ class _PlayerCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                    label: const Text('Contact Player'),
+                    icon: const Icon(Icons.person_outline, size: 16),
+                    label: const Text('View Profile'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.coachColor,
                       side: const BorderSide(color: AppColors.coachColor),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    onPressed: onViewProfile,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                    label: const Text('Contact'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.coachColor,
+                      foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -913,6 +1013,7 @@ class _PlayerCard extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

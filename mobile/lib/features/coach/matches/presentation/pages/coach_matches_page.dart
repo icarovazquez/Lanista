@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../../../core/theme/app_colors.dart';
 import '../../../../messaging/presentation/pages/conversation_detail_page.dart';
+import '../../../search/presentation/pages/coach_player_detail_page.dart';
 
 /// Coach's "Matches" tab — shows players ranked by the blueprint matching engine.
 /// Calls the `coach_player_matches()` PostgreSQL function via RPC.
@@ -301,6 +302,7 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
               delegate: SliverChildBuilderDelegate(
                 (context, i) => _MatchCard(
                   player: excellent[i],
+                  onViewProfile: () => _viewPlayerProfile(excellent[i]),
                   onContact: () => _contactPlayer(excellent[i]),
                   onAddToPipeline: () => _addToPipeline(excellent[i]),
                 ),
@@ -317,6 +319,7 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
               delegate: SliverChildBuilderDelegate(
                 (context, i) => _MatchCard(
                   player: strong[i],
+                  onViewProfile: () => _viewPlayerProfile(strong[i]),
                   onContact: () => _contactPlayer(strong[i]),
                   onAddToPipeline: () => _addToPipeline(strong[i]),
                 ),
@@ -332,6 +335,7 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
               delegate: SliverChildBuilderDelegate(
                 (context, i) => _MatchCard(
                   player: good[i],
+                  onViewProfile: () => _viewPlayerProfile(good[i]),
                   onContact: () => _contactPlayer(good[i]),
                   onAddToPipeline: () => _addToPipeline(good[i]),
                 ),
@@ -348,6 +352,7 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
               delegate: SliverChildBuilderDelegate(
                 (context, i) => _MatchCard(
                   player: possible[i],
+                  onViewProfile: () => _viewPlayerProfile(possible[i]),
                   onContact: () => _contactPlayer(possible[i]),
                   onAddToPipeline: () => _addToPipeline(possible[i]),
                 ),
@@ -451,6 +456,51 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
     }
   }
 
+  // ── View player profile ────────────────────────────────────────────────────
+
+  Future<void> _viewPlayerProfile(Map<String, dynamic> match) async {
+    final playerUserId = match['player_user_id'] as String?;
+    if (playerUserId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Player profile not available')),
+        );
+      }
+      return;
+    }
+
+    try {
+      final playerRecord = await _supabase
+          .from('players')
+          .select('id')
+          .eq('user_id', playerUserId)
+          .maybeSingle();
+      if (!mounted) return;
+      if (playerRecord == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Player profile not found')),
+        );
+        return;
+      }
+      final playerId = playerRecord['id'] as String;
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CoachPlayerDetailPage(playerId: playerId),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not load profile: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   // ── Contact player ─────────────────────────────────────────────────────────
 
   Future<void> _contactPlayer(Map<String, dynamic> match) async {
@@ -494,7 +544,7 @@ class _CoachMatchesPageState extends State<CoachMatchesPage>
             .insert({
               'player_id': playerId,
               'coach_id': coachId,
-              'contact_window_open': true,
+              'contact_window_valid': true,
               'initiated_by': 'coach',
             })
             .select('id')
@@ -682,11 +732,13 @@ class _LegendRow extends StatelessWidget {
 
 class _MatchCard extends StatelessWidget {
   final Map<String, dynamic> player;
+  final VoidCallback onViewProfile;
   final VoidCallback onContact;
   final VoidCallback onAddToPipeline;
 
   const _MatchCard({
     required this.player,
+    required this.onViewProfile,
     required this.onContact,
     required this.onAddToPipeline,
   });
@@ -721,7 +773,9 @@ class _MatchCard extends StatelessWidget {
     final posMatched = player['position_matched'] as bool? ?? false;
     final timelineMatched = player['timeline_matched'] as bool? ?? false;
 
-    return Container(
+    return GestureDetector(
+      onTap: onViewProfile,
+      child: Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -907,6 +961,21 @@ class _MatchCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
+                    icon: const Icon(Icons.person_outline, size: 16),
+                    label: const Text('Profile'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      side: const BorderSide(color: AppColors.border),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    onPressed: onViewProfile,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: OutlinedButton.icon(
                     icon: const Icon(Icons.add_chart_outlined, size: 16),
                     label: const Text('Pipeline'),
                     style: OutlinedButton.styleFrom(
@@ -919,7 +988,7 @@ class _MatchCard extends StatelessWidget {
                     onPressed: onAddToPipeline,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Expanded(
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.chat_bubble_outline, size: 16),
@@ -939,6 +1008,7 @@ class _MatchCard extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

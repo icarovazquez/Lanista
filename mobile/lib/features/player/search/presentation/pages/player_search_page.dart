@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../../../core/theme/app_colors.dart';
+import '../../../../../../core/theme/player_colors.dart';
+import '../../../../../../core/theme/player_theme_scope.dart';
 import '../../../../messaging/presentation/pages/conversation_detail_page.dart';
 
 /// Player's "Search Programs" tab — search college programs by division,
@@ -22,12 +24,37 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
   String? _selectedState;
   bool _recruitingOnly = false;
 
-  List<Map<String, dynamic>> _results = [];
+  // _allResults holds the raw Supabase fetch; _filteredResults is derived live
+  List<Map<String, dynamic>> _allResults = [];
   bool _isLoading = false;
   bool _hasSearched = false;
 
+  List<Map<String, dynamic>> get _results {
+    var r = _allResults;
+    if (_selectedDivision != null) {
+      r = r.where((c) => c['division'] == _selectedDivision).toList();
+    }
+    if (_selectedFormation != null) {
+      r = r.where((c) => c['primary_formation'] == _selectedFormation).toList();
+    }
+    if (_selectedState != null) {
+      r = r.where((c) => c['state'] == _selectedState).toList();
+    }
+    if (_recruitingOnly) {
+      r = r.where((c) {
+        final slots = c['roster_slots'] as List? ?? [];
+        return slots.any((s) => s['needs_recruit'] == true);
+      }).toList();
+    }
+    return r;
+  }
+
   static const _divisions = ['D1', 'D2', 'D3', 'NAIA', 'NJCAA'];
-  static const _formations = ['4-3-3', '4-2-3-1', '3-4-3', '4-4-2', '3-5-2'];
+  static const _formations = [
+    '4-3-3', '4-2-3-1', '3-4-3', '4-4-2', '3-5-2',
+    '4-5-1', '4-3-2-1', '4-1-4-1', '5-3-2', '3-1-3-3',
+    '4-1-2-3', '4-2-2-2', '4-3-1-2', '5-2-1-2', '5-2-3', '5-2-2-1',
+  ];
   static const _states = [
     'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
     'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
@@ -42,6 +69,9 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
     super.dispose();
   }
 
+  /// Fetches all matching coaches from Supabase and stores in [_allResults].
+  /// Filters are applied live via the [_results] getter — no re-fetch needed
+  /// when the user changes division/formation/state/recruiting toggles.
   Future<void> _search() async {
     setState(() {
       _isLoading = true;
@@ -64,16 +94,6 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
           ''')
           .eq('is_published', true);
 
-      if (_selectedDivision != null) {
-        query = query.eq('division', _selectedDivision!);
-      }
-      if (_selectedFormation != null) {
-        query = query.eq('primary_formation', _selectedFormation!);
-      }
-      if (_selectedState != null) {
-        query = query.eq('state', _selectedState!);
-      }
-
       final keyword = _searchController.text.trim();
       if (keyword.isNotEmpty) {
         query = query.ilike('school_name', '%$keyword%');
@@ -81,20 +101,9 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
 
       final data = await query.order('school_name', ascending: true);
 
-      List<Map<String, dynamic>> results =
-          List<Map<String, dynamic>>.from(data as List);
-
-      // Filter by recruiting need if toggled (needs at least one slot needing recruit)
-      if (_recruitingOnly) {
-        results = results.where((coach) {
-          final slots = coach['roster_slots'] as List? ?? [];
-          return slots.any((s) => s['needs_recruit'] == true);
-        }).toList();
-      }
-
       if (mounted) {
         setState(() {
-          _results = results;
+          _allResults = List<Map<String, dynamic>>.from(data as List);
           _isLoading = false;
         });
       }
@@ -102,7 +111,10 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Search failed: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Search failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
@@ -115,44 +127,65 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
       _selectedState = null;
       _recruitingOnly = false;
       _searchController.clear();
-      _results = [];
+      _allResults = [];
       _hasSearched = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = PlayerThemeScope.isDark(context);
     return Column(
       children: [
-        _buildSearchBar(),
-        _buildFilterRow(),
-        Expanded(child: _buildBody()),
+        _buildSearchBar(isDark),
+        _buildFilterRow(isDark),
+        Expanded(child: _buildBody(isDark)),
       ],
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(bool isDark) {
     return Container(
-      color: AppColors.surface,
+      color: isDark ? PlayerColors.surface : AppColors.surface,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _searchController,
+              style: TextStyle(
+                color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+              ),
               decoration: InputDecoration(
                 hintText: 'Search programs (e.g. "Stanford", "Georgetown")',
-                hintStyle: const TextStyle(
+                hintStyle: TextStyle(
                   fontSize: 13,
-                  color: AppColors.textTertiary,
+                  color: isDark ? PlayerColors.textTertiary : AppColors.textTertiary,
                 ),
-                prefixIcon:
-                    const Icon(Icons.search, color: AppColors.textTertiary),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: isDark ? PlayerColors.textTertiary : AppColors.textTertiary,
+                ),
                 filled: true,
-                fillColor: AppColors.surfaceVariant,
+                fillColor: isDark
+                    ? PlayerColors.surfaceVariant
+                    : AppColors.surfaceVariant,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark ? PlayerColors.border : Colors.transparent,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark ? PlayerColors.accent : AppColors.primary,
+                    width: 1.5,
+                  ),
                 ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
@@ -162,8 +195,9 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
           const SizedBox(width: 8),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+              backgroundColor: isDark ? PlayerColors.accent : AppColors.primary,
+              foregroundColor:
+                  isDark ? PlayerColors.textOnAccent : Colors.white,
               minimumSize: const Size(0, 48),
               padding: const EdgeInsets.symmetric(horizontal: 16),
               shape: RoundedRectangleBorder(
@@ -178,14 +212,14 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
     );
   }
 
-  Widget _buildFilterRow() {
+  Widget _buildFilterRow(bool isDark) {
     final hasFilters = _selectedDivision != null ||
         _selectedFormation != null ||
         _selectedState != null ||
         _recruitingOnly;
 
     return Container(
-      color: AppColors.surface,
+      color: isDark ? PlayerColors.surface : AppColors.surface,
       padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,8 +236,9 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                     title: 'Select Division',
                     options: _divisions,
                     selected: _selectedDivision,
-                    onSelect: (v) =>
-                        setState(() => _selectedDivision = v == _selectedDivision ? null : v),
+                    onSelect: (v) => setState(
+                        () => _selectedDivision =
+                            v == _selectedDivision ? null : v),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -215,8 +250,9 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                     title: 'Select Formation',
                     options: _formations,
                     selected: _selectedFormation,
-                    onSelect: (v) =>
-                        setState(() => _selectedFormation = v == _selectedFormation ? null : v),
+                    onSelect: (v) => setState(
+                        () => _selectedFormation =
+                            v == _selectedFormation ? null : v),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -228,8 +264,9 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                     title: 'Select State',
                     options: _states,
                     selected: _selectedState,
-                    onSelect: (v) =>
-                        setState(() => _selectedState = v == _selectedState ? null : v),
+                    onSelect: (v) => setState(
+                        () =>
+                            _selectedState = v == _selectedState ? null : v),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -243,8 +280,10 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                         horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: _recruitingOnly
-                          ? AppColors.primary
-                          : AppColors.surfaceVariant,
+                          ? (isDark ? PlayerColors.accent : AppColors.primary)
+                          : (isDark
+                              ? PlayerColors.surfaceVariant
+                              : AppColors.surfaceVariant),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -254,8 +293,12 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                           Icons.star,
                           size: 14,
                           color: _recruitingOnly
-                              ? Colors.white
-                              : AppColors.textSecondary,
+                              ? (isDark
+                                  ? PlayerColors.textOnAccent
+                                  : Colors.white)
+                              : (isDark
+                                  ? PlayerColors.textSecondary
+                                  : AppColors.textSecondary),
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -264,8 +307,12 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: _recruitingOnly
-                                ? Colors.white
-                                : AppColors.textSecondary,
+                                ? (isDark
+                                    ? PlayerColors.textOnAccent
+                                    : Colors.white)
+                                : (isDark
+                                    ? PlayerColors.textSecondary
+                                    : AppColors.textSecondary),
                           ),
                         ),
                       ],
@@ -302,19 +349,21 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(bool isDark) {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
+      return Center(
+        child: CircularProgressIndicator(
+          color: isDark ? PlayerColors.accent : AppColors.primary,
+        ),
       );
     }
 
     if (!_hasSearched) {
-      return _buildLanding();
+      return _buildLanding(isDark);
     }
 
     if (_results.isEmpty) {
-      return _buildEmpty();
+      return _buildEmpty(isDark);
     }
 
     return ListView.builder(
@@ -323,40 +372,43 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
       itemBuilder: (context, index) => _ProgramCard(
         program: _results[index],
         onMessage: () => _startConversation(_results[index]),
+        onViewProgram: () => _showProgramProfile(_results[index]),
       ),
     );
   }
 
-  Widget _buildLanding() {
+  Widget _buildLanding(bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Find Your Program',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Search across hundreds of college soccer programs. Filter by division, formation style, and state.',
             style: TextStyle(
               fontSize: 14,
-              color: AppColors.textSecondary,
+              color: isDark
+                  ? PlayerColors.textSecondary
+                  : AppColors.textSecondary,
               height: 1.5,
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Browse by Division',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 12),
@@ -374,16 +426,23 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppColors.primaryContainer,
+                        color: isDark
+                            ? PlayerColors.accentSubtle
+                            : AppColors.primaryContainer,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.3)),
+                          color: isDark
+                              ? PlayerColors.borderAccent
+                              : AppColors.primary.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Text(
                         d,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
+                          color: isDark
+                              ? PlayerColors.accent
+                              : AppColors.primary,
                         ),
                       ),
                     ),
@@ -392,12 +451,12 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                 .toList(),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Browse by Formation',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 12),
@@ -415,15 +474,21 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: isDark ? PlayerColors.surface : Colors.white,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
+                        border: Border.all(
+                          color: isDark
+                              ? PlayerColors.border
+                              : AppColors.border,
+                        ),
                       ),
                       child: Text(
                         f,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: isDark
+                              ? PlayerColors.textPrimary
+                              : AppColors.textPrimary,
                         ),
                       ),
                     ),
@@ -436,7 +501,7 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
     );
   }
 
-  Widget _buildEmpty() {
+  Widget _buildEmpty(bool isDark) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -445,26 +510,32 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
           children: [
             const Text('🔍', style: TextStyle(fontSize: 56)),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No programs found',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Try adjusting your filters or search with a different keyword.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: AppColors.textSecondary,
+                color: isDark
+                    ? PlayerColors.textSecondary
+                    : AppColors.textSecondary,
                 height: 1.5,
               ),
             ),
             const SizedBox(height: 16),
             TextButton(
               onPressed: _clearFilters,
+              style: TextButton.styleFrom(
+                foregroundColor:
+                    isDark ? PlayerColors.accent : AppColors.primary,
+              ),
               child: const Text('Clear Filters'),
             ),
           ],
@@ -480,24 +551,45 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
     if (userId == null) return;
 
     try {
+      // Resolve players.id from auth uid (conversations.player_id references players.id)
+      final playerRow = await _supabase
+          .from('players')
+          .select('id')
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (playerRow == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Complete your player profile first')),
+          );
+        }
+        return;
+      }
+      final playerId = playerRow['id'] as String;
+
       // Check or create conversation
       final existing = await _supabase
           .from('conversations')
           .select('id')
-          .eq('player_id', userId)
+          .eq('player_id', playerId)
           .eq('coach_id', program['id'] as String)
           .maybeSingle();
 
       String conversationId;
       if (existing != null) {
         conversationId = existing['id'] as String;
+        // Re-open contact window if it was closed
+        await _supabase
+            .from('conversations')
+            .update({'contact_window_valid': true})
+            .eq('id', conversationId);
       } else {
         final created = await _supabase
             .from('conversations')
             .insert({
-              'player_id': userId,
+              'player_id': playerId,
               'coach_id': program['id'] as String,
-              'contact_window_open': true,
+              'initiated_by': 'player',
             })
             .select('id')
             .single();
@@ -516,6 +608,7 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                   'Coach ${coachUser['first_name'] ?? ''} ${coachUser['last_name'] ?? ''}'
                       .trim(),
               otherUserRole: 'coach',
+              isDark: PlayerThemeScope.isDark(context),
             ),
           ),
         );
@@ -531,7 +624,26 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
     }
   }
 
-  // ── Filter sheet ─────────────────────────────────────────────────────────────
+  // ── Program profile sheet ────────────────────────────────────────────────────
+
+  void _showProgramProfile(Map<String, dynamic> program) {
+    final isDark = PlayerThemeScope.isDark(context);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ProgramProfileSheet(
+        program: program,
+        isDark: isDark,
+        onMessage: () {
+          Navigator.pop(ctx);
+          _startConversation(program);
+        },
+      ),
+    );
+  }
+
+  // ── Filter picker sheet ──────────────────────────────────────────────────────
 
   void _showPickerSheet({
     required String title,
@@ -539,9 +651,12 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
     required String? selected,
     required void Function(String) onSelect,
   }) {
+    final isDark = PlayerThemeScope.isDark(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor:
+          isDark ? PlayerColors.surfaceElevated : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -557,7 +672,7 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.border,
+                color: isDark ? PlayerColors.border : AppColors.border,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -565,9 +680,12 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
               padding: const EdgeInsets.all(16),
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
+                  color: isDark
+                      ? PlayerColors.textPrimary
+                      : AppColors.textPrimary,
                 ),
               ),
             ),
@@ -579,9 +697,21 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
                   final opt = options[i];
                   final isSelected = opt == selected;
                   return ListTile(
-                    title: Text(opt),
+                    title: Text(
+                      opt,
+                      style: TextStyle(
+                        color: isDark
+                            ? PlayerColors.textPrimary
+                            : AppColors.textPrimary,
+                      ),
+                    ),
                     trailing: isSelected
-                        ? const Icon(Icons.check, color: AppColors.primary)
+                        ? Icon(
+                            Icons.check,
+                            color: isDark
+                                ? PlayerColors.accent
+                                : AppColors.primary,
+                          )
                         : null,
                     onTap: () {
                       onSelect(opt);
@@ -598,7 +728,7 @@ class _PlayerSearchPageState extends State<PlayerSearchPage> {
   }
 }
 
-// ── Shared Sub-Widgets ────────────────────────────────────────────────────────
+// ── Sub-Widgets ───────────────────────────────────────────────────────────────
 
 class _FilterChip extends StatelessWidget {
   final String label;
@@ -613,13 +743,19 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = PlayerThemeScope.isDark(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primary : AppColors.surfaceVariant,
+          color: isActive
+              ? (isDark ? PlayerColors.accent : AppColors.primary)
+              : (isDark
+                  ? PlayerColors.surfaceVariant
+                  : AppColors.surfaceVariant),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -630,14 +766,22 @@ class _FilterChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: isActive ? Colors.white : AppColors.textSecondary,
+                color: isActive
+                    ? (isDark ? PlayerColors.textOnAccent : Colors.white)
+                    : (isDark
+                        ? PlayerColors.textSecondary
+                        : AppColors.textSecondary),
               ),
             ),
             const SizedBox(width: 4),
             Icon(
               isActive ? Icons.close : Icons.keyboard_arrow_down,
               size: 14,
-              color: isActive ? Colors.white : AppColors.textSecondary,
+              color: isActive
+                  ? (isDark ? PlayerColors.textOnAccent : Colors.white)
+                  : (isDark
+                      ? PlayerColors.textSecondary
+                      : AppColors.textSecondary),
             ),
           ],
         ),
@@ -649,11 +793,17 @@ class _FilterChip extends StatelessWidget {
 class _ProgramCard extends StatelessWidget {
   final Map<String, dynamic> program;
   final VoidCallback onMessage;
+  final VoidCallback onViewProgram;
 
-  const _ProgramCard({required this.program, required this.onMessage});
+  const _ProgramCard({
+    required this.program,
+    required this.onMessage,
+    required this.onViewProgram,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = PlayerThemeScope.isDark(context);
     final coachUser =
         (program['users'] as Map<String, dynamic>?) ?? {};
     final coachName =
@@ -670,16 +820,20 @@ class _ProgramCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? PlayerColors.surface : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(
+          color: isDark ? PlayerColors.border : AppColors.border,
+        ),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -693,16 +847,20 @@ class _ProgramCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: AppColors.coachColor.withValues(alpha: 0.1),
+                    color: isDark
+                        ? PlayerColors.gradientStart.withValues(alpha: 0.15)
+                        : AppColors.coachColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
                     child: Text(
                       schoolName.isNotEmpty ? schoolName[0] : '?',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.coachColor,
+                        color: isDark
+                            ? PlayerColors.gradientStart
+                            : AppColors.coachColor,
                       ),
                     ),
                   ),
@@ -714,18 +872,22 @@ class _ProgramCard extends StatelessWidget {
                     children: [
                       Text(
                         schoolName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
+                          color: isDark
+                              ? PlayerColors.textPrimary
+                              : AppColors.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         coachName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: isDark
+                              ? PlayerColors.textSecondary
+                              : AppColors.textSecondary,
                         ),
                       ),
                     ],
@@ -736,15 +898,17 @@ class _ProgramCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.12),
+                      color: (isDark ? PlayerColors.success : AppColors.success)
+                          .withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Recruiting',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.success,
+                        color:
+                            isDark ? PlayerColors.success : AppColors.success,
                       ),
                     ),
                   ),
@@ -755,10 +919,29 @@ class _ProgramCard extends StatelessWidget {
               spacing: 6,
               runSpacing: 6,
               children: [
-                if (division.isNotEmpty) _Tag(label: division, color: AppColors.coachColor),
-                if (formation.isNotEmpty) _Tag(label: formation, color: AppColors.primary),
-                if (state.isNotEmpty) _Tag(label: '📍 $state', color: AppColors.textSecondary),
-                if (style.isNotEmpty) _Tag(label: style, color: AppColors.mentorColor),
+                if (division.isNotEmpty)
+                  _Tag(
+                    label: division,
+                    color: isDark ? PlayerColors.info : AppColors.coachColor,
+                  ),
+                if (formation.isNotEmpty)
+                  _Tag(
+                    label: formation,
+                    color: isDark ? PlayerColors.accent : AppColors.primary,
+                  ),
+                if (state.isNotEmpty)
+                  _Tag(
+                    label: '📍 $state',
+                    color: isDark
+                        ? PlayerColors.textSecondary
+                        : AppColors.textSecondary,
+                  ),
+                if (style.isNotEmpty)
+                  _Tag(
+                    label: style,
+                    color:
+                        isDark ? PlayerColors.warning : AppColors.mentorColor,
+                  ),
               ],
             ),
             const SizedBox(height: 12),
@@ -766,11 +949,36 @@ class _ProgramCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                    label: const Text('Message Coach'),
+                    icon: const Icon(Icons.school_outlined, size: 16),
+                    label: const Text('View Program'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
+                      foregroundColor: isDark
+                          ? PlayerColors.textSecondary
+                          : AppColors.textSecondary,
+                      side: BorderSide(
+                        color: isDark
+                            ? PlayerColors.border
+                            : AppColors.border,
+                      ),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    onPressed: onViewProgram,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                    label: const Text('Message'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDark
+                          ? PlayerColors.accent
+                          : AppColors.primary,
+                      foregroundColor: isDark
+                          ? PlayerColors.textOnAccent
+                          : Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -787,6 +995,201 @@ class _ProgramCard extends StatelessWidget {
   }
 }
 
+// ── Program Profile Sheet ─────────────────────────────────────────────────────
+
+class _ProgramProfileSheet extends StatelessWidget {
+  final Map<String, dynamic> program;
+  final bool isDark;
+  final VoidCallback onMessage;
+
+  const _ProgramProfileSheet({
+    required this.program,
+    required this.isDark,
+    required this.onMessage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final coachUser = (program['users'] as Map<String, dynamic>?) ?? {};
+    final coachName =
+        '${coachUser['first_name'] ?? ''} ${coachUser['last_name'] ?? ''}'.trim();
+    final schoolName = program['school_name'] as String? ?? 'Unknown';
+    final division = program['division'] as String? ?? '';
+    final state = program['state'] as String? ?? '';
+    final formation = program['primary_formation'] as String? ?? '';
+    final style = program['playing_style'] as String? ?? '';
+    final slots = (program['roster_slots'] as List?) ?? [];
+    final needsRecruit = slots.any((s) => s['needs_recruit'] == true);
+    final bg = isDark ? PlayerColors.surfaceElevated : Colors.white;
+    final textPrimary = isDark ? PlayerColors.textPrimary : AppColors.textPrimary;
+    final textSecondary = isDark ? PlayerColors.textSecondary : AppColors.textSecondary;
+    final accent = isDark ? PlayerColors.accent : AppColors.primary;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 12,
+        bottom: MediaQuery.of(context).viewPadding.bottom + 24,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: isDark ? PlayerColors.border : AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+
+            // School avatar + name
+            Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? PlayerColors.gradientStart.withValues(alpha: 0.15)
+                        : AppColors.coachColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Center(
+                    child: Text(
+                      schoolName.isNotEmpty ? schoolName[0] : '?',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? PlayerColors.gradientStart : AppColors.coachColor,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        schoolName,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Head Coach $coachName',
+                        style: TextStyle(fontSize: 13, color: textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                if (needsRecruit)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Recruiting',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? PlayerColors.success : AppColors.success,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Info rows
+            _InfoRow(label: 'Division', value: division.isNotEmpty ? division : '—', isDark: isDark),
+            _InfoRow(label: 'State', value: state.isNotEmpty ? state : '—', isDark: isDark),
+            _InfoRow(label: 'Formation', value: formation.isNotEmpty ? formation : '—', isDark: isDark),
+            if (style.isNotEmpty)
+              _InfoRow(label: 'Style', value: style, isDark: isDark),
+
+            const SizedBox(height: 20),
+
+            // Message button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                label: const Text('Message Coach'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accent,
+                  foregroundColor: isDark ? PlayerColors.textOnAccent : Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: onMessage,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isDark;
+
+  const _InfoRow({required this.label, required this.value, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Tag extends StatelessWidget {
   final String label;
   final Color color;
@@ -796,7 +1199,8 @@ class _Tag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),

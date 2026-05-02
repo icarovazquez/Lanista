@@ -1,7 +1,7 @@
 name: lanista
 description: Connecting elite youth soccer players with college coaches.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.4+9
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -47,16 +47,14 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   shared_preferences: ^2.3.5
 
-  # Analytics & Monitoring
-  posthog_flutter: ^4.6.0
-  sentry_flutter: ^8.14.2
+  # Analytics & Monitoring — posthog/sentry removed (Kotlin 1.6 incompatibility + iOS startup crash)
 
-  # Payments
-  flutter_stripe: ^11.3.0
+  # Payments — stripe removed (iOS startup crash, not yet implemented)
 
   # Utilities
   intl: ^0.20.2
   url_launcher: ^6.3.1
+  app_links: ^6.3.4
   image_picker: ^1.1.2
   file_picker: ^8.3.7
   package_info_plus: ^8.3.0
@@ -68,9 +66,15 @@ dependencies:
   # Firebase (FCM push notifications)
   firebase_core: ^3.13.0
   firebase_messaging: ^15.2.5
+  local_auth: ^3.0.1
+
+  # HTTP client for Mux direct uploads
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   flutter_lints: ^5.0.0
   build_runner: ^2.4.15

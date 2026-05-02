@@ -25,8 +25,8 @@ const corsHeaders = {
 
 interface Player {
   user_id: string
-  primary_position_id: string | null
-  secondary_position_id: string | null
+  primary_position: string | null
+  secondary_position: string | null
   dominant_foot: string | null
   height_cm: string | null
   graduation_year: number | null
@@ -39,14 +39,14 @@ interface Player {
 
 interface CoachRequirement {
   coach_id: string
-  position_id: string
+  position_key: string
   required_qualities: string[]
   is_published: boolean
 }
 
 interface RosterSlot {
   coach_id: string
-  position_id: string
+  position_key: string
   graduation_year: number | null
   slot_status: string
 }
@@ -56,8 +56,8 @@ interface Coach {
   user_id: string
   school_name: string | null
   division: string | null
-  primary_formation_id: string | null
-  recruiting_class_years: number[] | null
+  primary_formation: string | null
+  recruiting_class_years: string[] | null
   requirements: CoachRequirement[]
   roster_slots: RosterSlot[]
 }
@@ -111,15 +111,15 @@ serve(async (req) => {
         user_id,
         school_name,
         division,
-        primary_formation_id,
+        primary_formation,
         recruiting_class_years,
         coach_position_requirements!inner(
-          position_id,
+          position_key,
           required_qualities,
           is_published
         ),
         roster_slots(
-          position_id,
+          position_key,
           graduation_year,
           slot_status
         )
@@ -149,9 +149,9 @@ serve(async (req) => {
 
       if (score.total >= 30) { // Only save meaningful matches
         matches.push({
-          player_id: player.user_id,
+          player_id: player.id,
           coach_id: coach.id,
-          total_score: Math.round(score.total),
+          overall_score: Math.round(score.total),
           tactical_score: Math.round(score.tactical),
           position_score: Math.round(score.position),
           physical_score: Math.round(score.physical),
@@ -159,7 +159,7 @@ serve(async (req) => {
           timeline_score: Math.round(score.timeline),
           match_reasons: score.reasons,
           match_reasons_es: score.reasonsEs,
-          last_computed_at: new Date().toISOString(),
+          computed_at: new Date().toISOString(),
         })
       }
     }
@@ -168,7 +168,22 @@ serve(async (req) => {
     if (matches.length > 0) {
       const { error: upsertErr } = await supabase
         .from('player_coach_matches')
-        .upsert(matches, { onConflict: 'player_id,coach_id' })
+        .upsert(
+          matches.map(m => ({
+            player_id: m.player_id,
+            coach_id: m.coach_id,
+            total_score: m.overall_score,
+            tactical_score: m.tactical_score,
+            position_score: m.position_score,
+            physical_score: m.physical_score,
+            academic_score: m.academic_score,
+            timeline_score: m.timeline_score,
+            match_reasons: m.match_reasons,
+            match_reasons_es: m.match_reasons_es,
+            last_computed_at: m.computed_at,
+          })),
+          { onConflict: 'player_id,coach_id' },
+        )
 
       if (upsertErr) {
         console.error('Error upserting matches:', upsertErr)
@@ -220,23 +235,23 @@ function computeMatchScore(player: Player, coach: Coach): ScoreBreakdown {
 
   // Does coach have a requirement for the player's primary position?
   const primaryReq = coach.requirements?.find(
-    r => r.position_id === player.primary_position_id
+    r => r.position_key === player.primary_position
   )
   if (primaryReq) {
     tactical += 25
-    reasons.push(`Needs a ${player.primary_position_id?.toUpperCase()} in their ${coach.primary_formation_id} system`)
-    reasonsEs.push(`Necesita un ${player.primary_position_id?.toUpperCase()} en su sistema ${coach.primary_formation_id}`)
+    reasons.push(`Needs a ${player.primary_position?.toUpperCase()} in their ${coach.primary_formation} system`)
+    reasonsEs.push(`Necesita un ${player.primary_position?.toUpperCase()} en su sistema ${coach.primary_formation}`)
   }
 
   // Secondary position bonus
-  if (player.secondary_position_id) {
+  if (player.secondary_position) {
     const secondaryReq = coach.requirements?.find(
-      r => r.position_id === player.secondary_position_id
+      r => r.position_key === player.secondary_position
     )
     if (secondaryReq) {
       tactical += 10
-      reasons.push(`Can also fill ${player.secondary_position_id?.toUpperCase()} as backup`)
-      reasonsEs.push(`También puede cubrir ${player.secondary_position_id?.toUpperCase()} como alternativa`)
+      reasons.push(`Can also fill ${player.secondary_position?.toUpperCase()} as backup`)
+      reasonsEs.push(`También puede cubrir ${player.secondary_position?.toUpperCase()} como alternativa`)
     }
   }
 
@@ -248,7 +263,7 @@ function computeMatchScore(player: Player, coach: Coach): ScoreBreakdown {
   if (primaryReq) {
     // Does this position have an open roster slot?
     const openSlot = coach.roster_slots?.find(
-      s => s.position_id === player.primary_position_id && s.slot_status === 'open'
+      s => s.position_key === player.primary_position && s.slot_status === 'open'
     )
     if (openSlot) {
       position += 20

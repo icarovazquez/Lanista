@@ -136,7 +136,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
               title: const Text('Sign Out', style: TextStyle(color: AppColors.error)),
               onTap: () async {
                 await Supabase.instance.client.auth.signOut();
-                if (ctx.mounted) ctx.go('/auth/login');
+                if (ctx.mounted) ctx.go('/auth/login', extra: {'skipBiometrics': true});
               },
             ),
           ],
