@@ -41,6 +41,83 @@ class _TacticalBlueprintPageState extends State<TacticalBlueprintPage> {
   final _notesCtrl = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _loadExistingBlueprint();
+  }
+
+  Future<void> _loadExistingBlueprint() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final coachData = await Supabase.instance.client
+          .from('coaches')
+          .select('id, school_name, primary_formation, playing_styles, recruiting_class_years, recruiting_notes')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (coachData == null || !mounted) return;
+
+      final coachId = coachData['id'] as String;
+
+      final posReqs = await Supabase.instance.client
+          .from('coach_position_requirements')
+          .select('position_key, required_qualities')
+          .eq('coach_id', coachId);
+
+      final slots = await Supabase.instance.client
+          .from('roster_slots')
+          .select('position_key, graduation_year, slot_status')
+          .eq('coach_id', coachId);
+
+      if (!mounted) return;
+      setState(() {
+        _selectedFormation = coachData['primary_formation'] as String?;
+
+        final styles = coachData['playing_styles'];
+        if (styles is List) {
+          _selectedStyles
+            ..clear()
+            ..addAll(styles.cast<String>());
+        }
+
+        final years = coachData['recruiting_class_years'];
+        if (years is List) {
+          _targetRecruitYears
+            ..clear()
+            ..addAll(years.cast<String>());
+        }
+
+        _schoolCtrl.text = coachData['school_name'] as String? ?? '';
+        _notesCtrl.text  = coachData['recruiting_notes'] as String? ?? '';
+
+        for (final req in posReqs as List) {
+          final key = req['position_key'] as String?;
+          final qualities = req['required_qualities'];
+          if (key != null && qualities is List) {
+            _positionQualities[key] = qualities.cast<String>();
+          }
+        }
+
+        for (final slot in slots as List) {
+          final key    = slot['position_key'] as String?;
+          final year   = slot['graduation_year'];
+          final status = slot['slot_status'] as String?;
+          if (key != null && year != null) {
+            _rosterSlots[key] = {
+              'graduation_year': year,
+              'needs_recruit': status == 'open' || status == 'graduating',
+            };
+          }
+        }
+      });
+    } catch (_) {
+      // Load failure is non-fatal — form stays empty so coach can fill it in
+    }
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     _teamNameCtrl.dispose();
@@ -95,26 +172,36 @@ class _TacticalBlueprintPageState extends State<TacticalBlueprintPage> {
 
       final coachId = coachResult['id'] as String;
 
-      // Save position requirements using TEXT position_key (migration 015)
-      for (final entry in _positionQualities.entries) {
-        if (entry.value.isNotEmpty) {
-          await Supabase.instance.client.from('coach_position_requirements').upsert({
-            'coach_id': coachId,
-            'position_key': entry.key,       // TEXT, not UUID FK
-            'required_qualities': entry.value,
-            'is_published': true,
-          });
-        }
+      // Save position requirements — delete existing first, then insert fresh
+      // (no unique constraint on coach_position_requirements(coach_id, position_key))
+      await Supabase.instance.client
+          .from('coach_position_requirements')
+          .delete()
+          .eq('coach_id', coachId);
+      final posReqRows = _positionQualities.entries
+          .where((e) => e.value.isNotEmpty)
+          .map((e) => {
+                'coach_id': coachId,
+                'position_key': e.key,
+                'required_qualities': e.value,
+                'is_published': true,
+              })
+          .toList();
+      if (posReqRows.isNotEmpty) {
+        await Supabase.instance.client
+            .from('coach_position_requirements')
+            .insert(posReqRows);
       }
 
-      // Save roster slots using TEXT position_key + graduation_year (migration 015)
+      // Save roster slots — upsert with full unique key (coach_id, position_key, graduation_year, depth_order)
       for (final entry in _rosterSlots.entries) {
         await Supabase.instance.client.from('roster_slots').upsert({
           'coach_id': coachId,
-          'position_key': entry.key,         // TEXT, not UUID FK
+          'position_key': entry.key,
           'graduation_year': entry.value['graduation_year'],
+          'depth_order': 1,
           'slot_status': entry.value['needs_recruit'] == true ? 'open' : 'filled',
-        });
+        }, onConflict: 'coach_id,position_key,graduation_year,depth_order');
       }
 
       // Mark users.onboarding_complete = true

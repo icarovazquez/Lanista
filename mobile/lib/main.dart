@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:app_links/app_links.dart';
 import 'core/di/injection.dart';
 import 'app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Enable edge-to-edge on Android 15+ — lets Flutter handle system bar insets
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+  ));
+
   // Initialize Supabase
-  // In development, use placeholder values until Supabase project is created
   await Supabase.initialize(
     url: const String.fromEnvironment(
       'SUPABASE_URL',
@@ -19,8 +27,26 @@ Future<void> main() async {
     ),
   );
 
+  // Handle OAuth deep link if app was cold-started from a redirect
+  final appLinks = AppLinks();
+  final initialUri = await appLinks.getInitialLink();
+  if (initialUri != null) {
+    await _handleDeepLink(initialUri);
+  }
+
+  // Listen for OAuth deep links while app is running
+  appLinks.uriLinkStream.listen((uri) async {
+    await _handleDeepLink(uri);
+  });
+
   // Initialize dependency injection
   await configureDependencies();
 
   runApp(const LanistaApp());
+}
+
+Future<void> _handleDeepLink(Uri uri) async {
+  if (uri.scheme == 'com.lanista.lanista' && uri.host == 'auth-callback') {
+    await Supabase.instance.client.auth.getSessionFromUrl(uri);
+  }
 }

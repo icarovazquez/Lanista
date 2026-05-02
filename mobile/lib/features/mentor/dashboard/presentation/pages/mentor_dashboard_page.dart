@@ -18,7 +18,7 @@ class MentorDashboardPage extends StatelessWidget {
             icon: const Icon(Icons.logout, color: AppColors.error),
             onPressed: () async {
               await Supabase.instance.client.auth.signOut();
-              if (context.mounted) context.go('/auth/login');
+              if (context.mounted) context.go('/auth/login', extra: {'skipBiometrics': true});
             },
           ),
         ],

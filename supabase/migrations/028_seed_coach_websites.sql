@@ -1,0 +1,21 @@
+-- Backfill website_url for the 20 seeded test coaches (migration 023)
+UPDATE coaches SET website_url = 'goheels.com'              WHERE id = 'c3000000-0000-0000-0000-000000000001';
+UPDATE coaches SET website_url = 'gostanford.com'           WHERE id = 'c3000000-0000-0000-0000-000000000002';
+UPDATE coaches SET website_url = 'iuhoosiers.com'           WHERE id = 'c3000000-0000-0000-0000-000000000003';
+UPDATE coaches SET website_url = 'godeacs.com'              WHERE id = 'c3000000-0000-0000-0000-000000000004';
+UPDATE coaches SET website_url = 'guhoyas.com'              WHERE id = 'c3000000-0000-0000-0000-000000000005';
+UPDATE coaches SET website_url = 'clemsontigers.com'        WHERE id = 'c3000000-0000-0000-0000-000000000006';
+UPDATE coaches SET website_url = 'virginiasports.com'       WHERE id = 'c3000000-0000-0000-0000-000000000007';
+UPDATE coaches SET website_url = 'cuse.com'                 WHERE id = 'c3000000-0000-0000-0000-000000000008';
+UPDATE coaches SET website_url = 'gcusports.com'            WHERE id = 'c3000000-0000-0000-0000-000000000009';
+UPDATE coaches SET website_url = 'gopoly.com'               WHERE id = 'c3000000-0000-0000-0000-000000000010';
+UPDATE coaches SET website_url = 'nsusharksnation.com'      WHERE id = 'c3000000-0000-0000-0000-000000000011';
+UPDATE coaches SET website_url = 'wheelingcardinals.com'    WHERE id = 'c3000000-0000-0000-0000-000000000012';
+UPDATE coaches SET website_url = 'lynnsports.com'           WHERE id = 'c3000000-0000-0000-0000-000000000013';
+UPDATE coaches SET website_url = 'delancers.com'            WHERE id = 'c3000000-0000-0000-0000-000000000014';
+UPDATE coaches SET website_url = 'ephsports.com'            WHERE id = 'c3000000-0000-0000-0000-000000000015';
+UPDATE coaches SET website_url = 'amherstathletics.com'     WHERE id = 'c3000000-0000-0000-0000-000000000016';
+UPDATE coaches SET website_url = 'middleburypanthers.com'   WHERE id = 'c3000000-0000-0000-0000-000000000017';
+UPDATE coaches SET website_url = 'gotuftsjumbos.com'        WHERE id = 'c3000000-0000-0000-0000-000000000018';
+UPDATE coaches SET website_url = 'lwcsports.com'            WHERE id = 'c3000000-0000-0000-0000-000000000019';
+UPDATE coaches SET website_url = 'bueagles.com'             WHERE id = 'c3000000-0000-0000-0000-000000000020';

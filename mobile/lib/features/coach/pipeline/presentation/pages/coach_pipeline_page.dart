@@ -28,6 +28,7 @@ class _CoachPipelinePageState extends State<CoachPipelinePage>
     'evaluated',
     'offered',
     'committed',
+    'signed',
   ];
 
   static const _stageLabels = {
@@ -36,6 +37,7 @@ class _CoachPipelinePageState extends State<CoachPipelinePage>
     'evaluated': 'Evaluated',
     'offered': 'Offered',
     'committed': 'Committed ✅',
+    'signed': 'Signed 📝',
     'declined': 'Declined',
     'lost': 'Lost',
   };
@@ -46,6 +48,7 @@ class _CoachPipelinePageState extends State<CoachPipelinePage>
     'evaluated': AppColors.secondary,
     'offered': AppColors.primary,
     'committed': AppColors.success,
+    'signed': Color(0xFF1B5E20),
     'declined': AppColors.error,
     'lost': Color(0xFF9CA3AF),
   };
@@ -56,6 +59,7 @@ class _CoachPipelinePageState extends State<CoachPipelinePage>
     'evaluated': '🔍',
     'offered': '📋',
     'committed': '🎉',
+    'signed': '✍️',
     'declined': '❌',
     'lost': '🚪',
   };
@@ -254,65 +258,70 @@ class _CoachPipelinePageState extends State<CoachPipelinePage>
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Move $name to…',
-              style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 16),
-            ...[..._activeStages, 'declined', 'lost'].map((stage) {
-              final isCurrentStage = stage == currentStage;
-              final color =
-                  _stageColors[stage] ?? AppColors.textSecondary;
-              return ListTile(
-                leading: Text(
-                  _stageEmojis[stage] ?? '',
-                  style: const TextStyle(fontSize: 20),
-                ),
-                title: Text(
-                  _stageLabels[stage] ?? stage,
-                  style: TextStyle(
-                    fontWeight: isCurrentStage
-                        ? FontWeight.w700
-                        : FontWeight.normal,
-                    color: isCurrentStage ? color : AppColors.textPrimary,
-                  ),
-                ),
-                trailing: isCurrentStage
-                    ? Icon(Icons.check_circle, color: color)
-                    : null,
-                onTap: isCurrentStage
-                    ? null
-                    : () {
-                        Navigator.pop(ctx);
-                        _moveToStage(
-                            prospect['id'] as String, stage);
-                      },
-              );
-            }),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.delete_outline,
-                  color: AppColors.error),
-              title: const Text(
-                'Remove from Pipeline',
-                style: TextStyle(color: AppColors.error),
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Move $name to…',
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700),
               ),
-              onTap: () {
-                Navigator.pop(ctx);
-                _removeFromPipeline(prospect['id'] as String);
-              },
-            ),
-          ],
+              const SizedBox(height: 16),
+              ...[..._activeStages, 'declined', 'lost'].map((stage) {
+                final isCurrentStage = stage == currentStage;
+                final color =
+                    _stageColors[stage] ?? AppColors.textSecondary;
+                return ListTile(
+                  leading: Text(
+                    _stageEmojis[stage] ?? '',
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                  title: Text(
+                    _stageLabels[stage] ?? stage,
+                    style: TextStyle(
+                      fontWeight: isCurrentStage
+                          ? FontWeight.w700
+                          : FontWeight.normal,
+                      color: isCurrentStage ? color : AppColors.textPrimary,
+                    ),
+                  ),
+                  trailing: isCurrentStage
+                      ? Icon(Icons.check_circle, color: color)
+                      : null,
+                  onTap: isCurrentStage
+                      ? null
+                      : () {
+                          Navigator.pop(ctx);
+                          _moveToStage(
+                              prospect['id'] as String, stage);
+                        },
+                );
+              }),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.delete_outline,
+                    color: AppColors.error),
+                title: const Text(
+                  'Remove from Pipeline',
+                  style: TextStyle(color: AppColors.error),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _removeFromPipeline(prospect['id'] as String);
+                },
+              ),
+            ],
+          ),
+        ),
         ),
       ),
     );

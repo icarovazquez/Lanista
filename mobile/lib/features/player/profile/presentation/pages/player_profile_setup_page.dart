@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../../../core/di/injection.dart';
 import '../../../../../../core/theme/app_colors.dart';
+import '../../../../../../core/theme/app_theme.dart';
+import '../../../../../../core/theme/player_colors.dart';
+import '../../../../../../core/theme/player_theme_data.dart';
+import '../../../../../../core/theme/player_theme_scope.dart';
 import '../../../../../shared/widgets/step_progress_indicator.dart';
 import '../../data/player_profile_data.dart';
 
@@ -18,6 +23,7 @@ class _PlayerProfileSetupPageState extends State<PlayerProfileSetupPage> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
   bool _isSaving = false;
+  bool _isLoadingData = true;
 
   static const int _totalSteps = 5;
 
@@ -45,6 +51,126 @@ class _PlayerProfileSetupPageState extends State<PlayerProfileSetupPage> {
   // Step 5 — Goals
   final List<String> _selectedDivisions = [];
   final _bioCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingData();
+  }
+
+  Future<void> _loadExistingData() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Load user record (first/last name)
+      final userData = await Supabase.instance.client
+          .from('users')
+          .select('first_name, last_name')
+          .eq('id', userId)
+          .maybeSingle();
+
+      // Load player record (all profile fields)
+      final playerData = await Supabase.instance.client
+          .from('players')
+          .select(
+              'grade, graduation_year, dominant_foot, height_cm, gpa, '
+              'sat_score, act_score, bio, target_division, '
+              'primary_position, secondary_position, club_name, league')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingData = false;
+
+        // ── User fields ────────────────────────────────────────────────────
+        if (userData != null) {
+          _firstNameCtrl.text = userData['first_name'] as String? ?? '';
+          _lastNameCtrl.text  = userData['last_name']  as String? ?? '';
+        }
+
+        if (playerData == null) return;
+
+        // ── Grade ──────────────────────────────────────────────────────────
+        final grade = playerData['grade'];
+        if (grade != null) _selectedGrade = grade.toString();
+
+        // ── Graduation year → timeline label ──────────────────────────────
+        final gradYear = playerData['graduation_year'] as int?;
+        if (gradYear != null) {
+          final label = 'Class of $gradYear';
+          if (PlayerProfileData.targetTimelines.contains(label)) {
+            _selectedTimeline = label;
+          }
+        }
+
+        // ── Dominant foot ─────────────────────────────────────────────────
+        final foot = playerData['dominant_foot'] as String?;
+        if (foot == 'right') _footPreference = 'Right';
+        else if (foot == 'left') _footPreference = 'Left';
+        else if (foot == 'both') _footPreference = 'Both (Ambidextrous)';
+
+        // ── Height cm → range label ───────────────────────────────────────
+        final heightCm = playerData['height_cm'] as int?;
+        if (heightCm != null) {
+          if (heightCm < 152)       _heightRange = 'Under 5\'0"';
+          else if (heightCm <= 160) _heightRange = '5\'0" – 5\'3"';
+          else if (heightCm <= 170) _heightRange = '5\'4" – 5\'7"';
+          else if (heightCm <= 181) _heightRange = '5\'8" – 5\'11"';
+          else if (heightCm <= 189) _heightRange = '6\'0" – 6\'2"';
+          else                      _heightRange = '6\'3"+';
+        }
+
+        // ── GPA decimal → range label ─────────────────────────────────────
+        final gpa = (playerData['gpa'] as num?)?.toDouble();
+        if (gpa != null) {
+          if (gpa >= 4.0)      _gpaRange = '4.0 (Unweighted)';
+          else if (gpa >= 3.5) _gpaRange = '3.5 – 3.9';
+          else if (gpa >= 3.0) _gpaRange = '3.0 – 3.4';
+          else if (gpa >= 2.5) _gpaRange = '2.5 – 2.9';
+          else if (gpa >= 2.0) _gpaRange = '2.0 – 2.4';
+        }
+
+        // ── SAT / ACT ─────────────────────────────────────────────────────
+        final sat = playerData['sat_score'] as int?;
+        if (sat != null) _satCtrl.text = sat.toString();
+        final act = playerData['act_score'] as int?;
+        if (act != null) _actCtrl.text = act.toString();
+
+        // ── Bio ───────────────────────────────────────────────────────────
+        final bio = playerData['bio'] as String?;
+        if (bio != null) _bioCtrl.text = bio;
+
+        // ── Target division → selected divisions list ─────────────────────
+        final div = playerData['target_division'] as String?;
+        if (div != null) {
+          final divLabel = const {
+            'D1': 'NCAA Division I',
+            'D2': 'NCAA Division II',
+            'D3': 'NCAA Division III',
+            'NAIA': 'NAIA',
+            'JUCO': 'NJCAA (Junior College)',
+          }[div];
+          if (divLabel != null && !_selectedDivisions.contains(divLabel)) {
+            _selectedDivisions.add(divLabel);
+          }
+        }
+
+        // ── Positions ─────────────────────────────────────────────────────
+        _primaryPosition   = playerData['primary_position']   as String?;
+        _secondaryPosition = playerData['secondary_position'] as String?;
+
+        // ── Club & League ─────────────────────────────────────────────────
+        final clubName = playerData['club_name'] as String?;
+        if (clubName != null) _clubNameCtrl.text = clubName;
+        _selectedLeague = playerData['league'] as String?;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingData = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -98,27 +224,64 @@ class _PlayerProfileSetupPageState extends State<PlayerProfileSetupPage> {
       else if (_footPreference == 'Left') dominantFoot = 'left';
       else if (_footPreference != null) dominantFoot = 'both';
 
-      // Upsert player profile — column names match migration 011
+      // Map height range to a representative cm value
+      int? heightCm;
+      switch (_heightRange) {
+        case 'Under 5\'0"': heightCm = 150; break;
+        case '5\'0" – 5\'3"': heightCm = 158; break;
+        case '5\'4" – 5\'7"': heightCm = 168; break;
+        case '5\'8" – 5\'11"': heightCm = 178; break;
+        case '6\'0" – 6\'2"': heightCm = 185; break;
+        case '6\'3"+': heightCm = 193; break;
+      }
+
+      // Map GPA range to decimal midpoint
+      double? gpa;
+      switch (_gpaRange) {
+        case '4.0 (Unweighted)': gpa = 4.00; break;
+        case '3.5 – 3.9': gpa = 3.70; break;
+        case '3.0 – 3.4': gpa = 3.20; break;
+        case '2.5 – 2.9': gpa = 2.70; break;
+        case '2.0 – 2.4': gpa = 2.20; break;
+      }
+
+      // target_division: use first selected division, map label to DB enum value
+      String? targetDivision;
+      if (_selectedDivisions.isNotEmpty) {
+        final div = _selectedDivisions.first;
+        if (div.contains('Division I') && !div.contains('II') && !div.contains('III')) {
+          targetDivision = 'D1';
+        } else if (div.contains('Division II') && !div.contains('III')) {
+          targetDivision = 'D2';
+        } else if (div.contains('Division III')) {
+          targetDivision = 'D3';
+        } else if (div.contains('NAIA')) {
+          targetDivision = 'NAIA';
+        } else if (div.contains('Junior') || div.contains('NJCAA')) {
+          targetDivision = 'JUCO';
+        }
+      }
+
+      final existingBio = _bioCtrl.text.trim();
+
       await Supabase.instance.client.from('players').upsert({
         'user_id': userId,
         'grade': _selectedGrade != null ? int.tryParse(_selectedGrade!) : null,
         'graduation_year': _selectedTimeline != null
             ? int.tryParse(_selectedTimeline!.replaceAll('Class of ', ''))
             : null,
-        'primary_position': _primaryPosition,
-        'secondary_position': _secondaryPosition,
         'dominant_foot': dominantFoot,
-        // height_cm is INTEGER in DB — skip the range string, save null for now
-        'height_cm': null,
-        'club_name': _clubNameCtrl.text.trim().isEmpty ? null : _clubNameCtrl.text.trim(),
-        'league': _selectedLeague,
-        // gpa is NUMERIC(3,2) — skip range string, save null for now
-        'gpa': null,
+        'height_cm': heightCm,
+        'gpa': gpa,
         'sat_score': _satCtrl.text.trim().isEmpty ? null : int.tryParse(_satCtrl.text.trim()),
         'act_score': _actCtrl.text.trim().isEmpty ? null : int.tryParse(_actCtrl.text.trim()),
-        'bio': _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
-        'target_divisions': _selectedDivisions.isNotEmpty ? _selectedDivisions : null,
+        'bio': existingBio.isEmpty ? null : existingBio,
+        'target_division': targetDivision,
         'is_discoverable': true,
+        'primary_position': _primaryPosition,
+        'secondary_position': _secondaryPosition,
+        'club_name': _clubNameCtrl.text.trim().isEmpty ? null : _clubNameCtrl.text.trim(),
+        'league': _selectedLeague,
       }, onConflict: 'user_id');
 
       if (mounted) context.go('/player/dashboard');
@@ -157,15 +320,35 @@ class _PlayerProfileSetupPageState extends State<PlayerProfileSetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final themeService = getIt<PlayerThemeService>();
 
+    // Pushed routes sit outside PlayerDashboardPage's PlayerThemeScope,
+    // so we re-establish Theme + scope here using the GetIt singleton.
+    return ListenableBuilder(
+      listenable: themeService,
+      builder: (ctx, _) {
+        final isDark = themeService.value == PlayerThemeMode.dark;
+        return Theme(
+          data: isDark ? PlayerThemeData.dark : AppTheme.lightTheme,
+          child: PlayerThemeScope(
+            service: themeService,
+            child: _buildScaffold(ctx, isDark),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context, bool isDark) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isDark ? PlayerColors.background : AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: isDark ? PlayerColors.surface : AppColors.surface,
         leading: _currentStep > 0
             ? IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary, size: 18),
+                icon: Icon(Icons.arrow_back_ios,
+                    color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+                    size: 18),
                 onPressed: _prevStep,
               )
             : null,
@@ -174,11 +357,18 @@ class _PlayerProfileSetupPageState extends State<PlayerProfileSetupPage> {
           children: [
             Text(
               'Build Your Profile',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+              ),
             ),
             Text(
               'Step ${_currentStep + 1} of $_totalSteps',
-              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+              ),
             ),
           ],
         ),
@@ -188,58 +378,68 @@ class _PlayerProfileSetupPageState extends State<PlayerProfileSetupPage> {
           child: StepProgressIndicator(
             total: _totalSteps,
             current: _currentStep,
-            color: AppColors.playerColor,
+            color: isDark ? PlayerColors.accent : AppColors.playerColor,
           ),
         ),
       ),
-      body: PageView(
-        controller: _pageController,
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          _StepBasicInfo(
-            firstNameCtrl: _firstNameCtrl,
-            lastNameCtrl: _lastNameCtrl,
-            selectedGrade: _selectedGrade,
-            selectedTimeline: _selectedTimeline,
-            onGradeChanged: (v) => setState(() => _selectedGrade = v),
-            onTimelineChanged: (v) => setState(() => _selectedTimeline = v),
-            onChanged: () => setState(() {}),
-          ),
-          _StepPosition(
-            primaryPosition: _primaryPosition,
-            secondaryPosition: _secondaryPosition,
-            footPreference: _footPreference,
-            heightRange: _heightRange,
-            onPrimaryChanged: (v) => setState(() => _primaryPosition = v),
-            onSecondaryChanged: (v) => setState(() => _secondaryPosition = v),
-            onFootChanged: (v) => setState(() => _footPreference = v),
-            onHeightChanged: (v) => setState(() => _heightRange = v),
-          ),
-          _StepClub(
-            clubNameCtrl: _clubNameCtrl,
-            selectedLeague: _selectedLeague,
-            onLeagueChanged: (v) => setState(() => _selectedLeague = v),
-          ),
-          _StepAcademic(
-            gpaRange: _gpaRange,
-            satCtrl: _satCtrl,
-            actCtrl: _actCtrl,
-            onGpaChanged: (v) => setState(() => _gpaRange = v),
-          ),
-          _StepGoals(
-            selectedDivisions: _selectedDivisions,
-            bioCtrl: _bioCtrl,
-            onDivisionToggled: (div) {
-              setState(() {
-                if (_selectedDivisions.contains(div)) {
-                  _selectedDivisions.remove(div);
-                } else {
-                  _selectedDivisions.add(div);
-                }
-              });
-            },
-          ),
-        ],
+      body: _isLoadingData
+          ? Center(
+              child: CircularProgressIndicator(
+                color: isDark ? PlayerColors.accent : AppColors.playerColor,
+              ),
+            )
+          : GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: PageView(
+          controller: _pageController,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            _StepBasicInfo(
+              firstNameCtrl: _firstNameCtrl,
+              lastNameCtrl: _lastNameCtrl,
+              selectedGrade: _selectedGrade,
+              selectedTimeline: _selectedTimeline,
+              onGradeChanged: (v) => setState(() => _selectedGrade = v),
+              onTimelineChanged: (v) => setState(() => _selectedTimeline = v),
+              onChanged: () => setState(() {}),
+            ),
+            _StepPosition(
+              primaryPosition: _primaryPosition,
+              secondaryPosition: _secondaryPosition,
+              footPreference: _footPreference,
+              heightRange: _heightRange,
+              onPrimaryChanged: (v) => setState(() => _primaryPosition = v),
+              onSecondaryChanged: (v) => setState(() => _secondaryPosition = v),
+              onFootChanged: (v) => setState(() => _footPreference = v),
+              onHeightChanged: (v) => setState(() => _heightRange = v),
+            ),
+            _StepClub(
+              clubNameCtrl: _clubNameCtrl,
+              selectedLeague: _selectedLeague,
+              onLeagueChanged: (v) => setState(() => _selectedLeague = v),
+            ),
+            _StepAcademic(
+              gpaRange: _gpaRange,
+              satCtrl: _satCtrl,
+              actCtrl: _actCtrl,
+              onGpaChanged: (v) => setState(() => _gpaRange = v),
+            ),
+            _StepGoals(
+              selectedDivisions: _selectedDivisions,
+              bioCtrl: _bioCtrl,
+              onDivisionToggled: (div) {
+                setState(() {
+                  if (_selectedDivisions.contains(div)) {
+                    _selectedDivisions.remove(div);
+                  } else {
+                    _selectedDivisions.add(div);
+                  }
+                });
+              },
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
@@ -249,20 +449,38 @@ class _PlayerProfileSetupPageState extends State<PlayerProfileSetupPage> {
             children: [
               ElevatedButton(
                 onPressed: (_canProceed && !_isSaving) ? _nextStep : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark ? PlayerColors.accent : AppColors.primary,
+                  foregroundColor: isDark ? PlayerColors.textOnAccent : Colors.white,
+                  minimumSize: const Size(double.infinity, 52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  elevation: 0,
+                ),
                 child: _isSaving
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          color: isDark ? PlayerColors.textOnAccent : Colors.white,
+                          strokeWidth: 2,
+                        ),
                       )
                     : Text(_currentStep == _totalSteps - 1 ? 'Complete Profile' : 'Continue'),
               ),
               if (_currentStep < _totalSteps - 1 && _currentStep > 0)
                 TextButton(
                   onPressed: _nextStep,
-                  child: const Text(
+                  child: Text(
                     'Skip for now',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(
+                      color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                    ),
                   ),
                 ),
             ],
@@ -296,7 +514,7 @@ class _StepBasicInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isDark = PlayerThemeScope.isDark(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -328,7 +546,14 @@ class _StepBasicInfo extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          Text('Current Grade', style: theme.textTheme.labelLarge),
+          Text(
+            'Current Grade',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -338,13 +563,20 @@ class _StepBasicInfo extends StatelessWidget {
               return _SelectChip(
                 label: grade.label.replaceAll(' Grade', '').replaceAll(' (Freshman)', '\nFreshman').replaceAll(' (Sophomore)', '\nSophomore').replaceAll(' (Junior)', '\nJunior').replaceAll(' (Senior)', '\nSenior'),
                 isSelected: selected,
-                color: AppColors.playerColor,
+                color: isDark ? PlayerColors.accent : AppColors.playerColor,
                 onTap: () => onGradeChanged(selected ? null : grade.id),
               );
             }).toList(),
           ),
           const SizedBox(height: 24),
-          Text('Graduation Year', style: theme.textTheme.labelLarge),
+          Text(
+            'Graduation Year',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -354,7 +586,7 @@ class _StepBasicInfo extends StatelessWidget {
               return _SelectChip(
                 label: timeline,
                 isSelected: selected,
-                color: AppColors.playerColor,
+                color: isDark ? PlayerColors.accent : AppColors.playerColor,
                 onTap: () => onTimelineChanged(selected ? null : timeline),
               );
             }).toList(),
@@ -390,7 +622,7 @@ class _StepPosition extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isDark = PlayerThemeScope.isDark(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -402,7 +634,14 @@ class _StepPosition extends StatelessWidget {
             subtitle: 'Help coaches find you for the right role',
           ),
           const SizedBox(height: 32),
-          Text('Primary Position *', style: theme.textTheme.labelLarge),
+          Text(
+            'Primary Position *',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -412,13 +651,20 @@ class _StepPosition extends StatelessWidget {
               return _SelectChip(
                 label: '${pos.abbreviation}\n${pos.name}',
                 isSelected: selected,
-                color: AppColors.playerColor,
+                color: isDark ? PlayerColors.accent : AppColors.playerColor,
                 onTap: () => onPrimaryChanged(selected ? null : pos.id),
               );
             }).toList(),
           ),
           const SizedBox(height: 24),
-          Text('Secondary Position (Optional)', style: theme.textTheme.labelLarge),
+          Text(
+            'Secondary Position (Optional)',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -430,13 +676,22 @@ class _StepPosition extends StatelessWidget {
               return _SelectChip(
                 label: pos.abbreviation,
                 isSelected: selected,
-                color: AppColors.playerColor.withValues(alpha: 0.7),
+                color: isDark
+                    ? PlayerColors.accent.withValues(alpha: 0.7)
+                    : AppColors.playerColor.withValues(alpha: 0.7),
                 onTap: () => onSecondaryChanged(selected ? null : pos.id),
               );
             }).toList(),
           ),
           const SizedBox(height: 24),
-          Text('Dominant Foot', style: theme.textTheme.labelLarge),
+          Text(
+            'Dominant Foot',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
           Row(
             children: PlayerProfileData.footPreferences.map((foot) {
@@ -446,14 +701,21 @@ class _StepPosition extends StatelessWidget {
                 child: _SelectChip(
                   label: foot,
                   isSelected: selected,
-                  color: AppColors.playerColor,
+                  color: isDark ? PlayerColors.accent : AppColors.playerColor,
                   onTap: () => onFootChanged(selected ? null : foot),
                 ),
               );
             }).toList(),
           ),
           const SizedBox(height: 24),
-          Text('Height', style: theme.textTheme.labelLarge),
+          Text(
+            'Height',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -463,7 +725,7 @@ class _StepPosition extends StatelessWidget {
               return _SelectChip(
                 label: h,
                 isSelected: selected,
-                color: AppColors.playerColor,
+                color: isDark ? PlayerColors.accent : AppColors.playerColor,
                 onTap: () => onHeightChanged(selected ? null : h),
               );
             }).toList(),
@@ -489,57 +751,89 @@ class _StepClub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isDark = PlayerThemeScope.isDark(context);
+    final leagues = PlayerProfileData.leagues;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _StepHeader(
+          const _StepHeader(
             emoji: '🏟️',
             title: 'Your Club',
             subtitle: 'Where do you play currently?',
           ),
           const SizedBox(height: 32),
+
+          // ── League selection ───────────────────────────────────────────
+          Text(
+            'Current League',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: leagues.map((league) {
+              final selected = selectedLeague == league;
+              return _SelectChip(
+                label: league,
+                isSelected: selected,
+                color: isDark ? PlayerColors.accent : AppColors.playerColor,
+                onTap: () => onLeagueChanged(selected ? null : league),
+              );
+            }).toList(),
+          ),
+
+          const SizedBox(height: 24),
+          Text(
+            'Club / Team Name',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
           _ProfileTextField(
             controller: clubNameCtrl,
             label: 'Club / Team Name',
             hint: 'e.g. FC Dallas Academy, Real Colorado',
           ),
-          const SizedBox(height: 24),
-          Text('Current League', style: theme.textTheme.labelLarge),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: PlayerProfileData.leagues.map((league) {
-              final selected = selectedLeague == league;
-              return _SelectChip(
-                label: league,
-                isSelected: selected,
-                color: AppColors.playerColor,
-                onTap: () => onLeagueChanged(selected ? null : league),
-              );
-            }).toList(),
-          ),
+
           const SizedBox(height: 24),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.06),
+              color: isDark
+                  ? PlayerColors.accent.withValues(alpha: 0.06)
+                  : AppColors.primary.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+              border: Border.all(
+                color: isDark
+                    ? PlayerColors.accent.withValues(alpha: 0.2)
+                    : AppColors.primary.withValues(alpha: 0.2),
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline, color: AppColors.primary, size: 20),
+                Icon(
+                  Icons.info_outline,
+                  color: isDark ? PlayerColors.accent : AppColors.primary,
+                  size: 20,
+                ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'College coaches pay close attention to which leagues you play in. MLS NEXT and ECNL carry the most visibility.',
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
                       height: 1.5,
                     ),
                   ),
@@ -570,7 +864,7 @@ class _StepAcademic extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isDark = PlayerThemeScope.isDark(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -582,7 +876,14 @@ class _StepAcademic extends StatelessWidget {
             subtitle: 'NCAA eligibility starts in the classroom',
           ),
           const SizedBox(height: 32),
-          Text('GPA (Unweighted)', style: theme.textTheme.labelLarge),
+          Text(
+            'GPA (Unweighted)',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -592,7 +893,7 @@ class _StepAcademic extends StatelessWidget {
               return _SelectChip(
                 label: gpa,
                 isSelected: selected,
-                color: AppColors.playerColor,
+                color: isDark ? PlayerColors.accent : AppColors.playerColor,
                 onTap: () => onGpaChanged(selected ? null : gpa),
               );
             }).toList(),
@@ -623,26 +924,42 @@ class _StepAcademic extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.secondary.withValues(alpha: 0.08),
+              color: isDark
+                  ? PlayerColors.gradientStart.withValues(alpha: 0.08)
+                  : AppColors.secondary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+              border: Border.all(
+                color: isDark
+                    ? PlayerColors.gradientStart.withValues(alpha: 0.3)
+                    : AppColors.secondary.withValues(alpha: 0.3),
+              ),
             ),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Text('💡', style: TextStyle(fontSize: 16)),
-                    SizedBox(width: 8),
-                    Text('NCAA Eligibility Tip',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    const Text('💡', style: TextStyle(fontSize: 16)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'NCAA Eligibility Tip',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+                      ),
+                    ),
                   ],
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
                   'NCAA D1 requires a minimum 2.3 GPA in 16 core courses. D2 requires a 2.2 GPA. '
                   'Register with the NCAA Eligibility Center (ncaaeligibilitycenter.org) by junior year.',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                    height: 1.5,
+                  ),
                 ),
               ],
             ),
@@ -668,7 +985,7 @@ class _StepGoals extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isDark = PlayerThemeScope.isDark(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -680,9 +997,22 @@ class _StepGoals extends StatelessWidget {
             subtitle: "Let coaches know what you're aiming for",
           ),
           const SizedBox(height: 32),
-          Text('Target Division(s)', style: theme.textTheme.labelLarge),
+          Text(
+            'Target Division(s)',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text('Select all that apply', style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
+          Text(
+            'Select all that apply',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+            ),
+          ),
           const SizedBox(height: 12),
           ...PlayerProfileData.divisions.map((div) {
             final selected = selectedDivisions.contains(div);
@@ -696,28 +1026,48 @@ class _StepGoals extends StatelessWidget {
             );
           }),
           const SizedBox(height: 24),
-          Text('About Me', style: theme.textTheme.labelLarge),
+          Text(
+            'About Me',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: bioCtrl,
             maxLines: 4,
             maxLength: 300,
+            style: TextStyle(
+              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+            ),
             decoration: InputDecoration(
               hintText: 'Share your story, what makes you unique as a player, your work ethic...',
-              hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              hintStyle: TextStyle(
+                color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                fontSize: 13,
+              ),
               filled: true,
-              fillColor: AppColors.surface,
+              fillColor: isDark ? PlayerColors.surface : AppColors.surface,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(
+                  color: isDark ? PlayerColors.border : AppColors.border,
+                ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(
+                  color: isDark ? PlayerColors.border : AppColors.border,
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                borderSide: BorderSide(
+                  color: isDark ? PlayerColors.accent : AppColors.primary,
+                  width: 2,
+                ),
               ),
             ),
           ),
@@ -742,6 +1092,7 @@ class _StepHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = PlayerThemeScope.isDark(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -749,16 +1100,19 @@ class _StepHeader extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           title,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-              ),
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+          ),
         ),
       ],
     );
@@ -780,16 +1134,21 @@ class _SelectChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = PlayerThemeScope.isDark(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? color : Colors.white,
+          color: isSelected
+              ? color
+              : (isDark ? PlayerColors.surfaceVariant : Colors.white),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? color : AppColors.border,
+            color: isSelected
+                ? color
+                : (isDark ? PlayerColors.border : AppColors.border),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -799,7 +1158,9 @@ class _SelectChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? Colors.white : AppColors.textPrimary,
+            color: isSelected
+                ? (isDark ? PlayerColors.textOnAccent : Colors.white)
+                : (isDark ? PlayerColors.textPrimary : AppColors.textPrimary),
             height: 1.3,
           ),
         ),
@@ -825,26 +1186,43 @@ class _ProfileTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = PlayerThemeScope.isDark(context);
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       onChanged: onChanged,
+      style: TextStyle(
+        color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+      ),
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: TextStyle(
+          color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+        ),
         hintText: hint,
+        hintStyle: TextStyle(
+          color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+        ),
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: isDark ? PlayerColors.surface : AppColors.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(
+            color: isDark ? PlayerColors.border : AppColors.border,
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(
+            color: isDark ? PlayerColors.border : AppColors.border,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderSide: BorderSide(
+            color: isDark ? PlayerColors.accent : AppColors.primary,
+            width: 2,
+          ),
         ),
       ),
     );
@@ -864,16 +1242,22 @@ class _DivisionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = PlayerThemeScope.isDark(context);
+    final accentColor = isDark ? PlayerColors.accent : AppColors.playerColor;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.playerColor.withValues(alpha: 0.08) : Colors.white,
+          color: isSelected
+              ? accentColor.withValues(alpha: 0.08)
+              : (isDark ? PlayerColors.surfaceVariant : Colors.white),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? AppColors.playerColor : AppColors.border,
+            color: isSelected
+                ? accentColor
+                : (isDark ? PlayerColors.border : AppColors.border),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -881,7 +1265,9 @@ class _DivisionTile extends StatelessWidget {
           children: [
             Icon(
               isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: isSelected ? AppColors.playerColor : AppColors.border,
+              color: isSelected
+                  ? accentColor
+                  : (isDark ? PlayerColors.border : AppColors.border),
               size: 20,
             ),
             const SizedBox(width: 12),
@@ -890,7 +1276,9 @@ class _DivisionTile extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? AppColors.playerColor : AppColors.textPrimary,
+                color: isSelected
+                    ? accentColor
+                    : (isDark ? PlayerColors.textPrimary : AppColors.textPrimary),
               ),
             ),
           ],

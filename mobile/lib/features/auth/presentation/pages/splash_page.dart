@@ -40,14 +40,20 @@ class _SplashPageState extends State<SplashPage>
     if (session != null) {
       // Get user role and redirect accordingly
       try {
+        // Use maybeSingle so new OAuth users (no users row yet) go to role selection
         final user = await Supabase.instance.client
             .from('users')
             .select('role, onboarding_complete')
             .eq('id', session.user.id)
-            .single();
+            .maybeSingle();
+        if (!mounted) return;
+        if (user == null) {
+          // New sign-in via Google — no role assigned yet
+          context.go('/auth/role-selection');
+          return;
+        }
         final role = user['role'] as String;
         final onboardingComplete = user['onboarding_complete'] as bool? ?? false;
-        if (!mounted) return;
         switch (role) {
           case 'player':
             context.go(onboardingComplete ? '/player/dashboard' : '/player/profile/setup');

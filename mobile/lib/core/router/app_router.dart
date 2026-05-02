@@ -10,11 +10,14 @@ import '../../features/player/profile/presentation/pages/player_profile_setup_pa
 import '../../features/player/profile/presentation/pages/player_profile_page.dart';
 import '../../features/coach/roster_map/presentation/pages/coach_dashboard_page.dart';
 import '../../features/coach/tactical_blueprint/presentation/pages/tactical_blueprint_page.dart';
+import '../../features/coach/roi/presentation/pages/coach_roi_page.dart';
 import '../../features/parent/companion/presentation/pages/parent_dashboard_page.dart';
 import '../../features/mentor/dashboard/presentation/pages/mentor_dashboard_page.dart';
 import '../../features/education/presentation/pages/education_page.dart';
 import '../../features/education/presentation/widgets/article_detail_page.dart';
 import '../../features/education/data/education_articles.dart';
+import '../../features/notifications/presentation/pages/notifications_page.dart';
+import '../../features/player/profile/presentation/pages/player_profile_views_page.dart';
 
 /// Notifier that listens to Supabase auth state changes and notifies GoRouter.
 class SupabaseAuthNotifier extends ChangeNotifier {
@@ -44,10 +47,7 @@ class AppRouter {
       // Not logged in trying to access protected route → login
       if (!isLoggedIn && !isPublicRoute) return '/auth/login';
 
-      // Logged in on login page → go to splash to determine dashboard
-      if (isLoggedIn && loc == '/auth/login') return '/splash';
-
-      // Already logged in, don't redirect role-selection or any other auth route
+      // Login page handles its own post-sign-in navigation (including biometric setup offer)
       return null;
     },
     routes: [
@@ -57,7 +57,11 @@ class AppRouter {
       ),
       GoRoute(
         path: '/auth/login',
-        builder: (context, state) => const LoginPage(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final skip = extra?['skipBiometrics'] == true;
+          return LoginPage(skipBiometrics: skip);
+        },
       ),
       GoRoute(
         path: '/auth/register',
@@ -72,6 +76,10 @@ class AppRouter {
       GoRoute(
         path: '/player/dashboard',
         builder: (context, state) => const PlayerDashboardPage(),
+      ),
+      GoRoute(
+        path: '/player/profile-views',
+        builder: (context, state) => const PlayerProfileViewsPage(),
       ),
       GoRoute(
         path: '/player/profile',
@@ -91,6 +99,10 @@ class AppRouter {
         path: '/coach/tactical-blueprint',
         builder: (context, state) => const TacticalBlueprintPage(),
       ),
+      GoRoute(
+        path: '/coach/roi',
+        builder: (context, state) => const CoachRoiPage(),
+      ),
 
       // ── Parent Routes ──────────────────────────────────────────────────────
       GoRoute(
@@ -102,6 +114,12 @@ class AppRouter {
       GoRoute(
         path: '/mentor/dashboard',
         builder: (context, state) => const MentorDashboardPage(),
+      ),
+
+      // ── Notifications ──────────────────────────────────────────────────────
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsPage(),
       ),
 
       // ── Education Routes ───────────────────────────────────────────────────

@@ -63,13 +63,17 @@ class AppLocalizations {
           : 'Guide your players toward their college goals';
 
   // Navigation
-  String get dashboard => isSpanish ? 'Panel' : 'Dashboard';
-  String get matches => isSpanish ? 'Coincidencias' : 'Matches';
+  String get dashboard => isSpanish ? 'Inicio' : 'Home';
+  String get matches => isSpanish ? 'Partidos' : 'Matches';
   String get roadmap => isSpanish ? 'Hoja de Ruta' : 'Roadmap';
+  String get roadmapPhaseFoundation => isSpanish ? 'Base' : 'Foundation';
+  String get roadmapPhaseDevelopment => isSpanish ? 'Desarrollo' : 'Development';
+  String get roadmapPhaseRecruitment => isSpanish ? 'Reclutam.' : 'Recruitment';
+  String get roadmapPhaseCommitment => isSpanish ? 'Compromiso' : 'Commitment';
   String get search => isSpanish ? 'Buscar' : 'Search';
   String get messages => isSpanish ? 'Mensajes' : 'Messages';
   String get profile => isSpanish ? 'Perfil' : 'Profile';
-  String get rosterMap => isSpanish ? 'Mapa de Plantilla' : 'Roster Map';
+  String get rosterMap => isSpanish ? 'Plantilla' : 'Roster Map';
   String get pipeline => isSpanish ? 'Pipeline' : 'Pipeline';
 
   // Common

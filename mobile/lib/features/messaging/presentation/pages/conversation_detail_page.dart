@@ -2,12 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../../../core/theme/app_colors.dart';
+import '../../../../../../core/theme/player_colors.dart';
 
 class ConversationDetailPage extends StatefulWidget {
   final String conversationId;
   final String otherUserId;
   final String otherUserName;
   final String otherUserRole; // 'player' | 'coach'
+  /// Pass true when opened from a player-side page to apply Design D dark theme.
+  final bool isDark;
 
   const ConversationDetailPage({
     super.key,
@@ -15,6 +18,7 @@ class ConversationDetailPage extends StatefulWidget {
     required this.otherUserId,
     required this.otherUserName,
     required this.otherUserRole,
+    this.isDark = false,
   });
 
   @override
@@ -30,8 +34,10 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
   bool _isLoading = true;
   bool _isSending = false;
   String? _currentUserId;
-  bool _isContactWindowOpen = true; // NCAA compliance flag
+  bool _isContactWindowOpen = true;
   bool _requiresParentApproval = false;
+
+  bool get _d => widget.isDark;
 
   @override
   void initState() {
@@ -51,15 +57,13 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
     super.dispose();
   }
 
-  // ── Data Loading ────────────────────────────────────────────────────────────
-
   Future<void> _loadMessages() async {
     try {
       final data = await _supabase
           .from('messages')
           .select()
           .eq('conversation_id', widget.conversationId)
-          .order('created_at', ascending: true);
+          .order('sent_at', ascending: true);
 
       if (mounted) {
         setState(() {
@@ -72,12 +76,15 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
         _scrollToBottom();
       }
 
-      // Mark messages as read
-      await _supabase
-          .from('messages')
-          .update({'read_at': DateTime.now().toIso8601String()})
-          .eq('conversation_id', widget.conversationId)
-          .neq('sender_id', _currentUserId ?? '');
+      // Mark incoming messages as read — skip if we don't have current user yet
+      if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+        await _supabase
+            .from('messages')
+            .update({'is_read': true})
+            .eq('conversation_id', widget.conversationId)
+            .neq('sender_id', _currentUserId!)
+            .catchError((_) {}); // non-critical, ignore errors
+      }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -97,7 +104,8 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
           ),
           callback: (payload) {
             final msg = _Message.fromMap(payload.newRecord);
-            if (mounted) {
+            // Skip if already added locally (our own sent message)
+            if (mounted && !_messages.any((m) => m.id == msg.id)) {
               setState(() => _messages.add(msg));
               _scrollToBottom();
             }
@@ -106,27 +114,21 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
         .subscribe();
   }
 
-  /// Check if NCAA contact window is currently open.
-  /// Real logic: coaches can only contact players Sept 1 of junior year onward.
-  /// For MVP we check a flag on the conversation or default open.
   Future<void> _checkContactWindow() async {
     try {
       final data = await _supabase
           .from('conversations')
-          .select('contact_window_open')
+          .select('contact_window_valid')
           .eq('id', widget.conversationId)
           .maybeSingle();
       if (mounted && data != null) {
         setState(() {
-          _isContactWindowOpen = data['contact_window_open'] as bool? ?? true;
+          _isContactWindowOpen = data['contact_window_valid'] as bool? ?? true;
         });
       }
-    } catch (_) {
-      // default open
-    }
+    } catch (_) {}
   }
 
-  /// Check if player is a minor → require parent approval
   Future<void> _checkParentApproval() async {
     if (widget.otherUserRole != 'player') return;
     try {
@@ -145,8 +147,6 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
     } catch (_) {}
   }
 
-  // ── Sending ─────────────────────────────────────────────────────────────────
-
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty || _isSending) return;
@@ -154,18 +154,35 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
       _showContactWindowClosed();
       return;
     }
+    // Reload user ID in case session wasn't ready at initState time
+    _currentUserId ??= _supabase.auth.currentUser?.id;
+    if (_currentUserId == null || _currentUserId!.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session expired — please log in again')),
+        );
+      }
+      return;
+    }
 
     setState(() => _isSending = true);
     _textController.clear();
 
     try {
-      await _supabase.from('messages').insert({
+      final result = await _supabase.from('messages').insert({
         'conversation_id': widget.conversationId,
         'sender_id': _currentUserId,
         'body': text,
+        'content': text,
         'requires_parent_approval': _requiresParentApproval,
-        'approved_at': _requiresParentApproval ? null : DateTime.now().toIso8601String(),
-      });
+      }).select().single();
+
+      // Add locally immediately so it shows without relying on realtime
+      if (mounted) {
+        final msg = _Message.fromMap(result);
+        setState(() => _messages.add(msg));
+        _scrollToBottom();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -174,7 +191,6 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
             backgroundColor: AppColors.error,
           ),
         );
-        // Restore the text so user doesn't lose it
         _textController.text = text;
       }
     } finally {
@@ -198,35 +214,41 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: _d ? PlayerColors.surfaceElevated : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Text('🚫', style: TextStyle(fontSize: 24)),
-            SizedBox(width: 8),
-            Text('Contact Window Closed'),
+            const Text('🚫', style: TextStyle(fontSize: 24)),
+            const SizedBox(width: 8),
+            Text('Contact Window Closed',
+                style: TextStyle(
+                    color: _d ? PlayerColors.textPrimary : AppColors.textPrimary)),
           ],
         ),
-        content: const Text(
+        content: Text(
           'NCAA regulations prohibit contact during this period. '
           'Coaches may contact recruits starting September 1 of their junior year.',
-          style: TextStyle(fontSize: 14),
+          style: TextStyle(
+              fontSize: 14,
+              color: _d ? PlayerColors.textSecondary : AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Understood'),
+            child: Text('Understood',
+                style: TextStyle(
+                    color: _d ? PlayerColors.accent : AppColors.primary)),
           ),
         ],
       ),
     );
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _d ? PlayerColors.background : AppColors.background,
+      resizeToAvoidBottomInset: false,
       appBar: _buildAppBar(),
       body: Column(
         children: [
@@ -241,10 +263,11 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
 
   AppBar _buildAppBar() {
     return AppBar(
-      backgroundColor: AppColors.surface,
+      backgroundColor: _d ? PlayerColors.surfaceElevated : AppColors.surface,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+        icon: Icon(Icons.arrow_back,
+            color: _d ? PlayerColors.textPrimary : AppColors.textPrimary),
         onPressed: () => Navigator.pop(context),
       ),
       title: Row(
@@ -252,8 +275,12 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
           CircleAvatar(
             radius: 18,
             backgroundColor: widget.otherUserRole == 'coach'
-                ? AppColors.coachColor.withValues(alpha: 0.15)
-                : AppColors.primaryContainer,
+                ? (_d
+                    ? PlayerColors.gradientStart.withValues(alpha: 0.2)
+                    : AppColors.coachColor.withValues(alpha: 0.15))
+                : (_d
+                    ? PlayerColors.accent.withValues(alpha: 0.15)
+                    : AppColors.primaryContainer),
             child: Text(
               widget.otherUserName.isNotEmpty
                   ? widget.otherUserName[0].toUpperCase()
@@ -261,8 +288,8 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: widget.otherUserRole == 'coach'
-                    ? AppColors.coachColor
-                    : AppColors.primary,
+                    ? (_d ? PlayerColors.gradientStart : AppColors.coachColor)
+                    : (_d ? PlayerColors.accent : AppColors.primary),
               ),
             ),
           ),
@@ -272,17 +299,17 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
             children: [
               Text(
                 widget.otherUserName,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: _d ? PlayerColors.textPrimary : AppColors.textPrimary,
                 ),
               ),
               Text(
                 widget.otherUserRole == 'coach' ? 'College Coach' : 'Player',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.textSecondary,
+                  color: _d ? PlayerColors.textSecondary : AppColors.textSecondary,
                 ),
               ),
             ],
@@ -291,7 +318,8 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.info_outline, color: AppColors.textSecondary),
+          icon: Icon(Icons.info_outline,
+              color: _d ? PlayerColors.textSecondary : AppColors.textSecondary),
           onPressed: _showConversationInfo,
         ),
       ],
@@ -300,14 +328,12 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
 
   Widget _buildMessageList() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
+      return Center(
+        child: CircularProgressIndicator(
+            color: _d ? PlayerColors.accent : AppColors.primary),
       );
     }
-
-    if (_messages.isEmpty) {
-      return _buildEmptyChat();
-    }
+    if (_messages.isEmpty) return _buildEmptyChat();
 
     return ListView.builder(
       controller: _scrollController,
@@ -318,16 +344,17 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
         final isMe = msg.senderId == _currentUserId;
         final showDate = index == 0 ||
             !_isSameDay(_messages[index - 1].createdAt, msg.createdAt);
-
         return Column(
           children: [
-            if (showDate) _DateDivider(date: msg.createdAt),
+            if (showDate) _DateDivider(date: msg.createdAt, isDark: _d),
             _MessageBubble(
               message: msg,
               isMe: isMe,
+              isDark: _d,
+              otherUserName: widget.otherUserName,
               accentColor: widget.otherUserRole == 'coach'
-                  ? AppColors.coachColor
-                  : AppColors.primary,
+                  ? (_d ? PlayerColors.gradientStart : AppColors.coachColor)
+                  : (_d ? PlayerColors.accent : AppColors.primary),
             ),
           ],
         );
@@ -346,29 +373,29 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: AppColors.primaryContainer,
+                color: _d
+                    ? PlayerColors.accent.withValues(alpha: 0.12)
+                    : AppColors.primaryContainer,
                 shape: BoxShape.circle,
               ),
-              child: const Center(
-                child: Text('👋', style: TextStyle(fontSize: 36)),
-              ),
+              child: const Center(child: Text('👋', style: TextStyle(fontSize: 36))),
             ),
             const SizedBox(height: 20),
             Text(
               'Start the conversation',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: _d ? PlayerColors.textPrimary : AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Introduce yourself to ${widget.otherUserName}. Keep it professional and highlight what makes you a great fit.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: AppColors.textSecondary,
+                color: _d ? PlayerColors.textSecondary : AppColors.textSecondary,
                 height: 1.5,
               ),
             ),
@@ -376,14 +403,14 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: _d ? PlayerColors.surfaceVariant : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Text(
+              child: Text(
                 '💡 Tip: Coaches receive hundreds of messages. Mention your position, graduation year, and one specific reason you\'re interested in their program.',
                 style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.textSecondary,
+                  color: _d ? PlayerColors.textSecondary : AppColors.textSecondary,
                   height: 1.4,
                 ),
               ),
@@ -395,10 +422,15 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
   }
 
   Widget _buildInputBar() {
+    final borderClr = _d ? PlayerColors.border : AppColors.border;
+    final sendBtnClr = _isContactWindowOpen
+        ? (_d ? PlayerColors.accent : AppColors.primary)
+        : borderClr;
+
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: _d ? PlayerColors.surfaceElevated : AppColors.surface,
+        border: Border(top: BorderSide(color: borderClr)),
       ),
       padding: EdgeInsets.only(
         left: 16,
@@ -413,31 +445,32 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
             child: Container(
               constraints: const BoxConstraints(maxHeight: 120),
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: _d ? PlayerColors.surface : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(24),
+                border: _d ? Border.all(color: borderClr, width: 0.5) : null,
               ),
               child: TextField(
                 controller: _textController,
                 maxLines: null,
                 keyboardType: TextInputType.multiline,
                 textCapitalization: TextCapitalization.sentences,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textPrimary,
+                  color: _d ? PlayerColors.textPrimary : AppColors.textPrimary,
                 ),
                 decoration: InputDecoration(
                   hintText: _isContactWindowOpen
                       ? 'Type a message…'
                       : 'Contact window closed',
-                  hintStyle: const TextStyle(
-                    color: AppColors.textTertiary,
+                  hintStyle: TextStyle(
+                    color: _d ? PlayerColors.textSecondary : AppColors.textTertiary,
                     fontSize: 14,
                   ),
+                  filled: true,
+                  fillColor: Colors.transparent,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
                 enabled: _isContactWindowOpen,
                 onSubmitted: (_) => _sendMessage(),
@@ -448,7 +481,7 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
             child: _isSending
-                ? const SizedBox(
+                ? SizedBox(
                     width: 44,
                     height: 44,
                     child: Center(
@@ -457,7 +490,7 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: AppColors.primary,
+                          color: _d ? PlayerColors.accent : AppColors.primary,
                         ),
                       ),
                     ),
@@ -468,14 +501,12 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: _isContactWindowOpen
-                            ? AppColors.primary
-                            : AppColors.border,
+                        color: sendBtnClr,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.send_rounded,
-                        color: Colors.white,
+                        color: _d ? PlayerColors.textOnAccent : Colors.white,
                         size: 20,
                       ),
                     ),
@@ -486,11 +517,18 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
     );
   }
 
-  // ── Info Sheet ───────────────────────────────────────────────────────────────
-
   void _showConversationInfo() {
+    final sheetBg = _d ? PlayerColors.surfaceElevated : Colors.white;
+    final handleClr = _d ? PlayerColors.border : AppColors.border;
+    final titleClr = _d ? PlayerColors.textPrimary : AppColors.textPrimary;
+    final labelClr = _d ? PlayerColors.textSecondary : AppColors.textSecondary;
+    final tipBg = _d
+        ? PlayerColors.gradientStart.withValues(alpha: 0.1)
+        : AppColors.primaryContainer;
+
     showModalBottomSheet(
       context: context,
+      backgroundColor: sheetBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -505,51 +543,44 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                    color: handleClr, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'NCAA Recruiting Rules',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
-            ),
+            Text('NCAA Recruiting Rules',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700, color: titleClr)),
             const SizedBox(height: 12),
             _InfoRow(
               icon: '📅',
               label: 'Contact Window',
               value: _isContactWindowOpen ? 'Open ✅' : 'Closed 🚫',
               valueColor: _isContactWindowOpen ? AppColors.success : AppColors.error,
+              labelColor: labelClr,
+              titleColor: titleClr,
             ),
             _InfoRow(
               icon: '👨‍👩‍👧',
               label: 'Parent Approval',
               value: _requiresParentApproval ? 'Required' : 'Not required',
+              labelColor: labelClr,
+              titleColor: titleClr,
             ),
             _InfoRow(
               icon: '📋',
               label: 'Contact Type',
               value: 'Recruiting Contact',
+              labelColor: labelClr,
+              titleColor: titleClr,
             ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
+              decoration:
+                  BoxDecoration(color: tipBg, borderRadius: BorderRadius.circular(12)),
+              child: Text(
                 'NCAA D1 rules: Coaches may not initiate contact with a player before September 1 of their junior year of high school. Players may contact coaches at any time.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                  height: 1.4,
-                ),
+                style: TextStyle(fontSize: 12, color: labelClr, height: 1.4),
               ),
             ),
             const SizedBox(height: 8),
@@ -558,8 +589,6 @@ class _ConversationDetailPageState extends State<ConversationDetailPage> {
       ),
     );
   }
-
-  // ── Helpers ─────────────────────────────────────────────────────────────────
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -581,10 +610,7 @@ class _ContactWindowBanner extends StatelessWidget {
             child: Text(
               'NCAA contact window is currently closed. Messaging is read-only.',
               style: TextStyle(
-                fontSize: 12,
-                color: AppColors.error,
-                fontWeight: FontWeight.w500,
-              ),
+                  fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -607,10 +633,9 @@ class _ParentApprovalBanner extends StatelessWidget {
             child: Text(
               'Messages to this minor require parent/guardian approval before delivery.',
               style: TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -622,21 +647,31 @@ class _ParentApprovalBanner extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   final _Message message;
   final bool isMe;
+  final bool isDark;
   final Color accentColor;
+  final String otherUserName;
 
   const _MessageBubble({
     required this.message,
     required this.isMe,
+    required this.isDark,
     required this.accentColor,
+    required this.otherUserName,
   });
 
   @override
   Widget build(BuildContext context) {
+    final myBubbleBg = isDark ? PlayerColors.accent : AppColors.primary;
+    final theirBubbleBg = isDark ? PlayerColors.surface : AppColors.surface;
+    final myTextClr = isDark ? PlayerColors.textOnAccent : Colors.white;
+    final theirTextClr = isDark ? PlayerColors.textPrimary : AppColors.textPrimary;
+    final borderClr = isDark ? PlayerColors.border : AppColors.border;
+    final timeClr = isDark ? PlayerColors.textSecondary : AppColors.textTertiary;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) ...[
@@ -644,13 +679,9 @@ class _MessageBubble extends StatelessWidget {
               radius: 14,
               backgroundColor: accentColor.withValues(alpha: 0.15),
               child: Text(
-                '?', // could load initials
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: accentColor,
-                ),
-              ),
+                  otherUserName.isNotEmpty ? otherUserName[0].toUpperCase() : '?',
+                  style: TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w700, color: accentColor)),
             ),
             const SizedBox(width: 6),
           ],
@@ -660,24 +691,20 @@ class _MessageBubble extends StatelessWidget {
                   isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isMe ? AppColors.primary : AppColors.surface,
+                    color: isMe ? myBubbleBg : theirBubbleBg,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(18),
                       topRight: const Radius.circular(18),
                       bottomLeft: Radius.circular(isMe ? 18 : 4),
                       bottomRight: Radius.circular(isMe ? 4 : 18),
                     ),
-                    border: isMe
-                        ? null
-                        : Border.all(color: AppColors.border),
+                    border: isMe ? null : Border.all(color: borderClr),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
+                        color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
                         blurRadius: 4,
                         offset: const Offset(0, 1),
                       ),
@@ -686,30 +713,22 @@ class _MessageBubble extends StatelessWidget {
                   child: Text(
                     message.body,
                     style: TextStyle(
-                      fontSize: 14,
-                      color: isMe ? Colors.white : AppColors.textPrimary,
-                      height: 1.4,
-                    ),
+                        fontSize: 14,
+                        color: isMe ? myTextClr : theirTextClr,
+                        height: 1.4),
                   ),
                 ),
                 const SizedBox(height: 3),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (message.requiresParentApproval &&
-                        message.approvedAt == null)
+                    if (message.requiresParentApproval && message.approvedAt == null)
                       const Padding(
                         padding: EdgeInsets.only(right: 4),
-                        child: Text('⏳',
-                            style: TextStyle(fontSize: 10)),
+                        child: Text('⏳', style: TextStyle(fontSize: 10)),
                       ),
-                    Text(
-                      _formatTime(message.createdAt),
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.textTertiary,
-                      ),
-                    ),
+                    Text(_formatTime(message.createdAt),
+                        style: TextStyle(fontSize: 10, color: timeClr)),
                     if (isMe) ...[
                       const SizedBox(width: 4),
                       Icon(
@@ -717,7 +736,7 @@ class _MessageBubble extends StatelessWidget {
                             ? Icons.done_all
                             : Icons.access_time,
                         size: 12,
-                        color: AppColors.textTertiary,
+                        color: timeClr,
                       ),
                     ],
                   ],
@@ -741,28 +760,24 @@ class _MessageBubble extends StatelessWidget {
 
 class _DateDivider extends StatelessWidget {
   final DateTime date;
-
-  const _DateDivider({required this.date});
+  final bool isDark;
+  const _DateDivider({required this.date, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
+    final clr = isDark ? PlayerColors.textSecondary : AppColors.textTertiary;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          const Expanded(child: Divider()),
+          Expanded(child: Divider(color: clr.withValues(alpha: 0.4))),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              _formatDate(date),
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textTertiary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            child: Text(_formatDate(date),
+                style: TextStyle(
+                    fontSize: 11, color: clr, fontWeight: FontWeight.w500)),
           ),
-          const Expanded(child: Divider()),
+          Expanded(child: Divider(color: clr.withValues(alpha: 0.4))),
         ],
       ),
     );
@@ -773,10 +788,8 @@ class _DateDivider extends StatelessWidget {
     final today = DateTime(now.year, now.month, now.day);
     final msgDay = DateTime(dt.year, dt.month, dt.day);
     final diff = today.difference(msgDay).inDays;
-
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
-
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
@@ -790,12 +803,16 @@ class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
   final Color? valueColor;
+  final Color labelColor;
+  final Color titleColor;
 
   const _InfoRow({
     required this.icon,
     required this.label,
     required this.value,
     this.valueColor,
+    required this.labelColor,
+    required this.titleColor,
   });
 
   @override
@@ -807,22 +824,13 @@ class _InfoRow extends StatelessWidget {
           Text(icon, style: const TextStyle(fontSize: 16)),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: valueColor ?? AppColors.textPrimary,
-            ),
-          ),
+              child: Text(label,
+                  style: TextStyle(fontSize: 13, color: labelColor))),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: valueColor ?? titleColor)),
         ],
       ),
     );
@@ -855,12 +863,13 @@ class _Message {
       id: map['id'] as String,
       conversationId: map['conversation_id'] as String,
       senderId: map['sender_id'] as String,
-      body: map['body'] as String,
+      body: map['body'] as String? ?? map['content'] as String? ?? '',
       requiresParentApproval: map['requires_parent_approval'] as bool? ?? false,
       approvedAt: map['approved_at'] != null
           ? DateTime.parse(map['approved_at'] as String)
           : null,
-      createdAt: DateTime.parse(map['created_at'] as String),
+      createdAt: DateTime.parse(
+          map['created_at'] as String? ?? map['sent_at'] as String),
     );
   }
 }
