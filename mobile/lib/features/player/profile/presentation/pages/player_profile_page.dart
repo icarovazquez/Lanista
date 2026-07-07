@@ -1125,11 +1125,10 @@ class _AnalysisResultsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = PlayerThemeScope.isDark(context);
-    final bg = isDark ? PlayerColors.surface : Colors.white;
-    final textPrimary = isDark ? PlayerColors.textPrimary : AppColors.textPrimary;
-    final textSecondary = isDark ? PlayerColors.textSecondary : AppColors.textSecondary;
-    final accent = isDark ? PlayerColors.accent : AppColors.primary;
+    const bg = PlayerColors.surface;
+    const textPrimary = PlayerColors.textPrimary;
+    const textSecondary = PlayerColors.textSecondary;
+    const accent = PlayerColors.accent;
 
     final summary = result['summary'] as String? ?? '';
     final dominantFoot = result['dominant_foot'] as String? ?? '—';
@@ -1192,11 +1191,11 @@ class _AnalysisResultsSheet extends StatelessWidget {
             // Quick stats row
             Row(
               children: [
-                Expanded(child: _QuickStat(label: 'Position', value: position, isDark: isDark)),
+                Expanded(child: _QuickStat(label: 'Position', value: position)),
                 const SizedBox(width: 8),
-                Expanded(child: _QuickStat(label: 'Dominant Foot', value: dominantFoot.capitalize(), isDark: isDark)),
+                Expanded(child: _QuickStat(label: 'Dominant Foot', value: dominantFoot.capitalize())),
                 const SizedBox(width: 8),
-                Expanded(child: _QuickStat(label: 'Projection', value: projection, isDark: isDark)),
+                Expanded(child: _QuickStat(label: 'Projection', value: projection)),
               ],
             ),
             const SizedBox(height: 16),
@@ -1271,31 +1270,30 @@ class _AnalysisResultsSheet extends StatelessWidget {
 class _QuickStat extends StatelessWidget {
   final String label;
   final String value;
-  final bool isDark;
 
-  const _QuickStat({required this.label, required this.value, required this.isDark});
+  const _QuickStat({required this.label, required this.value, bool isDark = true});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isDark ? PlayerColors.surfaceElevated : AppColors.background,
+        color: PlayerColors.surfaceElevated,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: isDark ? PlayerColors.border : AppColors.border),
+        border: Border.all(color: PlayerColors.border),
       ),
       child: Column(
         children: [
           Text(value,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
-                color: isDark ? PlayerColors.accent : AppColors.primary,
+                color: PlayerColors.accent,
               ),
               textAlign: TextAlign.center),
           const SizedBox(height: 2),
           Text(label,
-              style: TextStyle(fontSize: 9, color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary),
+              style: const TextStyle(fontSize: 9, color: PlayerColors.textSecondary),
               textAlign: TextAlign.center),
         ],
       ),

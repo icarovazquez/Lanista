@@ -547,25 +547,25 @@ class _MatchCard extends StatelessWidget {
                           if (division.isNotEmpty) ...[
                             Text(
                               division,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: PlayerColors.textPrimary,
                               ),
                             ),
-                            Text(
+                            const Text(
                               ' • ',
                               style: TextStyle(
-                                fontSize: 11,
-                                color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                                fontSize: 12,
+                                color: PlayerColors.textPrimary,
                               ),
                             ),
                           ],
                           if (formation.isNotEmpty)
                             Text(
                               formation,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: PlayerColors.textPrimary,
                               ),
                             ),
                         ],
@@ -573,9 +573,9 @@ class _MatchCard extends StatelessWidget {
                       if (coachName.isNotEmpty)
                         Text(
                           'Coach $coachName',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: PlayerColors.textPrimary,
                           ),
                         ),
                     ],
@@ -895,25 +895,25 @@ class _ProgramDetailSheet extends StatelessWidget {
                         if (division.isNotEmpty)
                           Text(
                             division,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: PlayerColors.textPrimary,
                             ),
                           ),
                         if (division.isNotEmpty && formation.isNotEmpty)
-                          Text(
+                          const Text(
                             ' • ',
                             style: TextStyle(
-                              fontSize: 13,
-                              color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                              fontSize: 14,
+                              color: PlayerColors.textPrimary,
                             ),
                           ),
                         if (formation.isNotEmpty)
                           Text(
                             formation,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: PlayerColors.textPrimary,
                             ),
                           ),
                       ],
@@ -921,9 +921,9 @@ class _ProgramDetailSheet extends StatelessWidget {
                     if (coachName.isNotEmpty)
                       Text(
                         'Coach $coachName',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: PlayerColors.textPrimary,
                         ),
                       ),
                   ],
@@ -1132,40 +1132,39 @@ class _ScoreBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = PlayerThemeScope.isDark(context);
     final pct = maxScore > 0 ? score / maxScore : 0.0;
     return Row(
       children: [
         SizedBox(
-          width: 56,
+          width: 64,
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+            style: const TextStyle(
+              fontSize: 12,
+              color: PlayerColors.textPrimary,
             ),
           ),
         ),
         Expanded(
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(3),
             child: LinearProgressIndicator(
               value: pct.clamp(0.0, 1.0),
-              backgroundColor: color.withValues(alpha: 0.12),
+              backgroundColor: color.withValues(alpha: 0.15),
               valueColor: AlwaysStoppedAnimation<Color>(color),
-              minHeight: 6,
+              minHeight: 7,
             ),
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 8),
         SizedBox(
-          width: 28,
+          width: 40,
           child: Text(
             '$score/$maxScore',
-            style: TextStyle(
-              fontSize: 10,
+            style: const TextStyle(
+              fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+              color: PlayerColors.textPrimary,
             ),
             textAlign: TextAlign.right,
           ),
