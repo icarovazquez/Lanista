@@ -47,3 +47,9 @@ mobile/fastlane/test_output/
 # ─── Credentials ─────────────────────────────────────────────────────────────
 mobile/android/app/google-services.json
 mobile/ios/Runner/GoogleService-Info.plist
+android-keystore/
+*.keystore
+*.jks
+
+# ─── Dev tooling ─────────────────────────────────────────────────────────────
+.claude/

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/localization/app_localizations.dart';
+import '../../../../../core/config/app_config_service.dart';
 import '../../../../../shared/models/user_role.dart';
 
 class RoleSelectionPage extends StatefulWidget {
@@ -115,6 +116,15 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
     }
   }
 
+  void _showCoachWaitlistSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _CoachWaitlistSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
@@ -188,7 +198,13 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                       icon: '📋',
                       color: AppColors.coachColor,
                       isSelected: _selectedRole == UserRole.coach,
-                      onTap: () => setState(() => _selectedRole = UserRole.coach),
+                      onTap: () {
+                        if (AppConfigService.coachAccessEnabled) {
+                          setState(() => _selectedRole = UserRole.coach);
+                        } else {
+                          _showCoachWaitlistSheet(context);
+                        }
+                      },
                     ),
                     const SizedBox(height: 12),
                     _RoleCard(
@@ -329,4 +345,236 @@ class _RoleCard extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── Coach Waitlist Bottom Sheet ────────────────────────────────────────────────
+
+class _CoachWaitlistSheet extends StatefulWidget {
+  const _CoachWaitlistSheet();
+
+  @override
+  State<_CoachWaitlistSheet> createState() => _CoachWaitlistSheetState();
+}
+
+class _CoachWaitlistSheetState extends State<_CoachWaitlistSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _firstNameCtrl = TextEditingController();
+  final _lastNameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _schoolCtrl = TextEditingController();
+  String? _division;
+  bool _isSubmitting = false;
+  bool _submitted = false;
+
+  static const _divisions = ['NCAA D1', 'NCAA D2', 'NCAA D3', 'NAIA', 'JUCO'];
+
+  @override
+  void dispose() {
+    _firstNameCtrl.dispose();
+    _lastNameCtrl.dispose();
+    _emailCtrl.dispose();
+    _schoolCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSubmitting = true);
+    try {
+      await Supabase.instance.client.from('coach_waitlist').insert({
+        'first_name': _firstNameCtrl.text.trim(),
+        'last_name': _lastNameCtrl.text.trim(),
+        'email': _emailCtrl.text.trim().toLowerCase(),
+        'school': _schoolCtrl.text.trim().isEmpty ? null : _schoolCtrl.text.trim(),
+        'division': _division,
+      });
+      if (mounted) setState(() => _submitted = true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Something went wrong: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(24, 12, 24, 32 + bottomPad),
+      child: _submitted ? _buildSuccess() : _buildForm(),
+    );
+  }
+
+  Widget _buildSuccess() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _handle(),
+        const SizedBox(height: 24),
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            color: AppColors.coachColor.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Center(child: Text('🎉', style: TextStyle(fontSize: 36))),
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          "You're on the list!",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "We're launching the coach side soon. We'll email you the moment access opens.",
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+        ),
+        const SizedBox(height: 28),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _handle(),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.coachColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(child: Text('📋', style: TextStyle(fontSize: 22))),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Coach Access Coming Soon',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      "Join the waitlist — we'll notify you when it's live.",
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(child: _field(_firstNameCtrl, 'First name', required: true)),
+              const SizedBox(width: 12),
+              Expanded(child: _field(_lastNameCtrl, 'Last name', required: true)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _field(_emailCtrl, 'Email', keyboardType: TextInputType.emailAddress, required: true),
+          const SizedBox(height: 12),
+          _field(_schoolCtrl, 'School / Program (optional)'),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _division,
+            decoration: _inputDecoration('Division (optional)'),
+            items: _divisions
+                .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                .toList(),
+            onChanged: (v) => setState(() => _division = v),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isSubmitting ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.coachColor,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text('Join Waitlist', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _handle() => Center(
+        child: Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: AppColors.border,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      );
+
+  InputDecoration _inputDecoration(String label) => InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: AppColors.surface,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.border)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.border)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.primary, width: 2)),
+      );
+
+  Widget _field(
+    TextEditingController ctrl,
+    String label, {
+    bool required = false,
+    TextInputType keyboardType = TextInputType.text,
+  }) =>
+      TextFormField(
+        controller: ctrl,
+        keyboardType: keyboardType,
+        decoration: _inputDecoration(label),
+        validator: required
+            ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
+            : null,
+      );
 }

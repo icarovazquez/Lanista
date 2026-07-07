@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../../../core/theme/app_colors.dart';
 import '../../../../../../core/theme/player_colors.dart';
+import '../../../../../../core/theme/player_theme_data.dart';
 import '../../../../../../core/theme/player_theme_scope.dart';
+import '../../../../../../core/di/injection.dart';
 import '../../../../messaging/presentation/pages/conversation_detail_page.dart';
 
 /// Displays college program matches ranked by the Lanista matching engine.
@@ -56,21 +58,24 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
             academic_score,
             timeline_score,
             match_reasons,
+            match_gaps,
             last_computed_at,
             coaches!inner(
               id,
               school_name,
               division,
               primary_formation,
-              users!inner(first_name, last_name)
+              users(first_name, last_name)
             )
           ''')
           .eq('player_id', playerId)
           .order('total_score', ascending: false)
           .limit(50);
 
+      debugPrint('PlayerMatchesPage: loaded ${(data as List).length} matches');
       if (mounted) setState(() => _matches = List<Map<String, dynamic>>.from(data));
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('_loadMatches error: $e\n$st');
       if (mounted) setState(() => _errorMessage = e.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -80,25 +85,25 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
   Future<void> _runMatchingEngine() async {
     setState(() => _isRunningEngine = true);
     try {
-      // Refresh session to ensure a valid JWT before calling the edge function
       await Supabase.instance.client.auth.refreshSession();
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      await Supabase.instance.client.functions.invoke(
+      final response = await Supabase.instance.client.functions.invoke(
         'match-players',
         body: {'player_id': userId},
       );
+
+      debugPrint('match-players status: ${response.status}, data: ${response.data}');
+
+      if (response.status != 200) {
+        throw Exception('Engine error (${response.status}): ${response.data}');
+      }
+
       await _loadMatches();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not run matching engine: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      debugPrint('_runMatchingEngine error: $e');
+      if (mounted) setState(() => _errorMessage = e.toString());
     } finally {
       if (mounted) setState(() => _isRunningEngine = false);
     }
@@ -106,86 +111,103 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = PlayerThemeScope.isDark(context);
+    Widget body;
 
     if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(
-          color: isDark ? PlayerColors.accent : AppColors.primary,
+      body = const Center(
+        child: CircularProgressIndicator(color: PlayerColors.accent),
+      );
+    } else if (_matches.isEmpty) {
+      body = _EmptyMatchesState(
+        isRunning: _isRunningEngine,
+        errorMessage: _errorMessage,
+        onFindMatches: _runMatchingEngine,
+      );
+    } else {
+      body = RefreshIndicator(
+        onRefresh: _loadMatches,
+        color: PlayerColors.accent,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_matches.length} Program Matches',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: PlayerColors.textPrimary,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const Text(
+                      'Ranked by fit score',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: PlayerColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                TextButton.icon(
+                  onPressed: _isRunningEngine ? null : _runMatchingEngine,
+                  icon: _isRunningEngine
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: PlayerColors.accent,
+                          ),
+                        )
+                      : const Icon(Icons.refresh, size: 16),
+                  label: const Text('Refresh'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const _ScoreLegend(),
+            const SizedBox(height: 16),
+            ..._matches.asMap().entries.map((entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _MatchCard(match: entry.value, rank: entry.key + 1),
+                )),
+          ],
         ),
       );
     }
 
-    if (_matches.isEmpty) {
-      return _EmptyMatchesState(
-        isRunning: _isRunningEngine,
-        onFindMatches: _runMatchingEngine,
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadMatches,
-      color: isDark ? PlayerColors.accent : AppColors.primary,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${_matches.length} Program Matches',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    'Ranked by fit score',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+    final themeService = getIt<PlayerThemeService>();
+    return ListenableBuilder(
+      listenable: themeService,
+      builder: (ctx, _) => Theme(
+        data: PlayerThemeData.dark,
+        child: PlayerThemeScope(
+          service: themeService,
+          child: Scaffold(
+            backgroundColor: PlayerColors.background,
+            appBar: AppBar(
+              backgroundColor: PlayerColors.background,
+              foregroundColor: PlayerColors.textPrimary,
+              iconTheme: const IconThemeData(color: PlayerColors.textPrimary),
+              elevation: 0,
+              title: const Text(
+                'My Matches',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: PlayerColors.textPrimary,
+                ),
               ),
-              TextButton.icon(
-                onPressed: _isRunningEngine ? null : _runMatchingEngine,
-                icon: _isRunningEngine
-                    ? SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: isDark ? PlayerColors.accent : AppColors.primary,
-                        ),
-                      )
-                    : const Icon(Icons.refresh, size: 16),
-                label: const Text('Refresh'),
-              ),
-            ],
+            ),
+            body: body,
           ),
-          const SizedBox(height: 12),
-          // Score legend
-          const _ScoreLegend(),
-          const SizedBox(height: 16),
-          // Match cards
-          ..._matches.asMap().entries.map((entry) {
-            final index = entry.key;
-            final match = entry.value;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _MatchCard(
-                match: match,
-                rank: index + 1,
-              ),
-            );
-          }),
-        ],
+        ),
       ),
     );
   }
@@ -195,16 +217,17 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
 
 class _EmptyMatchesState extends StatelessWidget {
   final bool isRunning;
+  final String? errorMessage;
   final VoidCallback onFindMatches;
 
   const _EmptyMatchesState({
     required this.isRunning,
     required this.onFindMatches,
+    this.errorMessage,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = PlayerThemeScope.isDark(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -214,8 +237,8 @@ class _EmptyMatchesState extends StatelessWidget {
             Container(
               width: 80,
               height: 80,
-              decoration: BoxDecoration(
-                color: isDark ? PlayerColors.accentDim : AppColors.primaryContainer,
+              decoration: const BoxDecoration(
+                color: PlayerColors.accentDim,
                 shape: BoxShape.circle,
               ),
               child: const Center(
@@ -223,64 +246,103 @@ class _EmptyMatchesState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            Text(
+            const Text(
               'Find Your Matches',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 22,
                 fontWeight: FontWeight.w800,
-                color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+                color: PlayerColors.textPrimary,
+                decoration: TextDecoration.none,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
+            const SizedBox(height: 10),
+            const Text(
               'Complete your profile and run the matching engine to see which college programs fit your style, position, and academic profile.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 13,
-                color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
-                height: 1.5,
+                fontSize: 14,
+                color: PlayerColors.textPrimary,
+                height: 1.6,
+                decoration: TextDecoration.none,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             ElevatedButton.icon(
               onPressed: isRunning ? null : onFindMatches,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: PlayerColors.accent,
+                foregroundColor: PlayerColors.textOnAccent,
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
               icon: isRunning
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0A0A0A)),
                     )
                   : const Icon(Icons.auto_awesome, size: 18),
-              label: Text(isRunning ? 'Finding matches...' : 'Find My Matches'),
+              label: Text(
+                isRunning ? 'Finding matches...' : 'Find My Matches',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: isDark ? PlayerColors.surface : AppColors.surface,
+                color: PlayerColors.surface,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF2A2A2A)),
               ),
-              child: Row(
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.info_outline,
-                    size: 16,
-                    color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: 8),
+                  Icon(Icons.info_outline, size: 16, color: PlayerColors.textSecondary),
+                  SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Lanista scores programs on tactical fit (35%), position need (25%), physical profile (20%), academics (15%), and timeline (5%).',
+                      'Scores programs on tactical fit (35%), position need (25%), physical profile (20%), academics (15%), and timeline (5%).',
                       style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
-                        height: 1.4,
+                        fontSize: 13,
+                        color: PlayerColors.textSecondary,
+                        height: 1.5,
+                        decoration: TextDecoration.none,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
+            if (errorMessage != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A0000),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade900),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.error_outline, size: 16, color: Colors.redAccent),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        errorMessage!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.redAccent,
+                          height: 1.4,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -381,6 +443,9 @@ class _MatchCard extends StatelessWidget {
     final reasons = ((match['match_reasons'] as List?) ?? [])
         .map((e) => e.toString())
         .toList();
+    final gaps = ((match['match_gaps'] as List?) ?? [])
+        .map((e) => e.toString())
+        .toList();
 
     final scoreColor = isDark
         ? PlayerColors.scoreColor(totalScore)
@@ -395,9 +460,11 @@ class _MatchCard extends StatelessWidget {
         color: isDark ? PlayerColors.surface : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: rank == 1
-              ? AppColors.secondary.withValues(alpha: 0.5)
-              : (isDark ? PlayerColors.border : AppColors.border),
+          color: rank == 1 && isDark
+              ? PlayerColors.accent.withValues(alpha: 0.4)
+              : rank == 1
+                  ? AppColors.secondary.withValues(alpha: 0.5)
+                  : (isDark ? PlayerColors.border : AppColors.border),
           width: rank == 1 ? 2 : 1,
         ),
         boxShadow: rank <= 3
@@ -444,13 +511,36 @@ class _MatchCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        schoolName,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              schoolName,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          if (rank == 1 && totalScore >= 75) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: PlayerColors.accent,
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: const Text(
+                                'HOT',
+                                style: TextStyle(
+                                  fontSize: 8, fontWeight: FontWeight.w900,
+                                  color: Color(0xFF0A0A0A), letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       Row(
                         children: [
@@ -533,42 +623,64 @@ class _MatchCard extends StatelessWidget {
               timeline: timelineScore,
             ),
           ),
-          // Top reasons
-          if (reasons.isNotEmpty) ...[
+          // Top reasons + gap count badge
+          if (reasons.isNotEmpty || gaps.isNotEmpty) ...[
             const SizedBox(height: 10),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: reasons.take(3).map((reason) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? PlayerColors.accentSubtle
-                        : AppColors.primary.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        size: 10,
-                        color: isDark ? PlayerColors.accent : AppColors.primary,
+                children: [
+                  // Up to 2 hit chips
+                  ...reasons.take(2).map((reason) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? PlayerColors.accentSubtle
+                          : AppColors.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle, size: 10,
+                            color: isDark ? PlayerColors.accent : AppColors.primary),
+                        const SizedBox(width: 4),
+                        Text(reason,
+                          style: TextStyle(fontSize: 10,
+                              color: isDark ? PlayerColors.accent : AppColors.primary,
+                              fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  )),
+                  // Gap count badge
+                  if (gaps.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF2D1F0A)
+                            : const Color(0xFFFFF8EC),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFFDE68A)),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        reason,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isDark ? PlayerColors.accent : AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, size: 10,
+                              color: Color(0xFFF59E0B)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${gaps.length} gap${gaps.length > 1 ? 's' : ''} · tap to see',
+                            style: const TextStyle(fontSize: 10,
+                                color: Color(0xFFF59E0B),
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                )).toList(),
+                    ),
+                ],
               ),
             ),
           ],
@@ -603,6 +715,7 @@ class _MatchCard extends StatelessWidget {
                           academicScore: academicScore,
                           timelineScore: timelineScore,
                           reasons: reasons,
+                          gaps: gaps,
                           scoreColor: scoreColor,
                           isDark: isDark,
                         ),
@@ -713,6 +826,7 @@ class _ProgramDetailSheet extends StatelessWidget {
   final int academicScore;
   final int timelineScore;
   final List<String> reasons;
+  final List<String> gaps;
   final Color scoreColor;
   final bool isDark;
 
@@ -728,6 +842,7 @@ class _ProgramDetailSheet extends StatelessWidget {
     required this.academicScore,
     required this.timelineScore,
     required this.reasons,
+    required this.gaps,
     required this.scoreColor,
     required this.isDark,
   });
@@ -860,41 +975,96 @@ class _ProgramDetailSheet extends StatelessWidget {
             timeline: timelineScore,
           ),
 
-          // Match reasons
+          // Why this program — hits
           if (reasons.isNotEmpty) ...[
             const SizedBox(height: 20),
-            Text(
-              'Why This Program',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
-              ),
+            Row(
+              children: [
+                Icon(Icons.check_circle, size: 14,
+                    color: isDark ? PlayerColors.accent : AppColors.primary),
+                const SizedBox(width: 6),
+                Text(
+                  'Why This Program',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             ...reasons.map((r) => Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.check_circle,
-                    size: 14,
-                    color: isDark ? PlayerColors.accent : AppColors.primary,
-                  ),
+                  Icon(Icons.check_circle_outline, size: 13,
+                      color: isDark ? PlayerColors.accent : AppColors.primary),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      r,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
-                      ),
-                    ),
+                    child: Text(r,
+                      style: TextStyle(fontSize: 12,
+                          color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary)),
                   ),
                 ],
               ),
             )),
+          ],
+
+          // What's holding you back — gaps
+          if (gaps.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, size: 14,
+                    color: isDark ? const Color(0xFFFFB74D) : const Color(0xFFF59E0B)),
+                const SizedBox(width: 6),
+                Text(
+                  'What\'s Holding You Back',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF2D1F0A)
+                    : const Color(0xFFFFF8EC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF6B4C1A)
+                      : const Color(0xFFFDE68A),
+                ),
+              ),
+              child: Column(
+                children: gaps.map((g) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.cancel_outlined, size: 13,
+                          color: Color(0xFFF59E0B)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(g,
+                          style: TextStyle(fontSize: 12,
+                              color: isDark
+                                  ? const Color(0xFFFFD580)
+                                  : const Color(0xFF92400E))),
+                      ),
+                    ],
+                  ),
+                )).toList(),
+              ),
+            ),
           ],
 
           const SizedBox(height: 20),
