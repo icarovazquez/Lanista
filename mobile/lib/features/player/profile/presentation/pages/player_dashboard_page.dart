@@ -1,17 +1,15 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../../../core/theme/app_colors.dart';
-import '../../../../../../core/theme/app_theme.dart';
 import '../../../../../../core/theme/player_colors.dart';
 import '../../../../../../core/theme/player_theme_data.dart';
 import '../../../../../../core/theme/player_theme_scope.dart';
 import '../../../../../../core/di/injection.dart';
-import '../../../../../../core/localization/app_localizations.dart';
-import '../../../roadmap/presentation/pages/player_roadmap_page.dart';
-import '../../../matches/presentation/pages/player_matches_page.dart';
 import '../../../../messaging/presentation/pages/conversations_page.dart';
 import '../../../search/presentation/pages/player_search_page.dart';
+import '../../../matches/presentation/pages/player_matches_page.dart';
+import '../../../video/presentation/pages/player_game_film_page.dart';
 import '../../../../notifications/presentation/widgets/notification_bell.dart';
 
 class PlayerDashboardPage extends StatefulWidget {
@@ -22,15 +20,19 @@ class PlayerDashboardPage extends StatefulWidget {
 }
 
 class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
-  int _currentIndex = 0;
+  int _currentIndex = 0; // 0=Home 1=Search 2=Messages
   String _firstName = '';
-  bool _onboardingComplete = false;
+  String _playerId = '';
   int _unreadCount = 0;
   RealtimeChannel? _msgChannel;
 
   @override
   void initState() {
     super.initState();
+    // C-lite: lock player app to dark mode
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      getIt<PlayerThemeService>().setMode(PlayerThemeMode.dark);
+    });
     _loadUser();
     _loadUnread();
     _subscribeUnread();
@@ -48,13 +50,18 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
       if (userId == null) return;
       final data = await Supabase.instance.client
           .from('users')
-          .select('first_name, onboarding_complete')
+          .select('first_name')
           .eq('id', userId)
           .single();
+      final playerRow = await Supabase.instance.client
+          .from('players')
+          .select('id')
+          .eq('user_id', userId)
+          .maybeSingle();
       if (mounted) {
         setState(() {
-          _firstName = data['first_name'] ?? '';
-          _onboardingComplete = data['onboarding_complete'] as bool? ?? false;
+          _firstName = data['first_name'] as String? ?? '';
+          _playerId = playerRow?['id'] as String? ?? '';
         });
       }
     } catch (_) {}
@@ -87,17 +94,69 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
         .subscribe();
   }
 
-  List<Widget> get _pages => [
-    _PlayerHomeTab(
-      onboardingComplete: _onboardingComplete,
-      firstName: _firstName,
-      onNavigate: (index) => setState(() => _currentIndex = index),
-    ),
-    const PlayerMatchesPage(),
-    const PlayerRoadmapPage(),
-    const PlayerSearchPage(),
-    const ConversationsPage(),
-  ];
+  void _openFilmPage() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PlayerGameFilmPage()),
+    );
+  }
+
+  void _showProfileMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: PlayerColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: PlayerColors.textTertiary.withAlpha(80),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                _ProfileMenuItem(
+                  icon: Icons.person_outline_rounded,
+                  label: 'View Profile',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/player/profile');
+                  },
+                ),
+                _ProfileMenuItem(
+                  icon: Icons.settings_outlined,
+                  label: 'Settings',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/player/settings');
+                  },
+                ),
+                const Divider(color: Color(0xFF2A2A2A), height: 8),
+                _ProfileMenuItem(
+                  icon: Icons.logout_rounded,
+                  label: 'Sign Out',
+                  destructive: true,
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await Supabase.instance.client.auth.signOut();
+                    if (mounted) context.go('/');
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -105,559 +164,943 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
     return ListenableBuilder(
       listenable: themeService,
       builder: (ctx, _) {
-        final isDark = themeService.value == PlayerThemeMode.dark;
         return Theme(
-          data: isDark ? PlayerThemeData.dark : AppTheme.lightTheme,
+          data: PlayerThemeData.dark,
           child: PlayerThemeScope(
             service: themeService,
-            child: _buildScaffold(ctx, isDark),
+            child: _buildScaffold(ctx),
           ),
         );
       },
     );
   }
 
-  Widget _buildScaffold(BuildContext context, bool isDark) {
-    final l10n = AppLocalizations.of(context)!;
-    final isTablet = MediaQuery.of(context).size.width >= 700;
-    final accent = isDark ? PlayerColors.accent : AppColors.primary;
-
-    final appBar = AppBar(
-      backgroundColor: isDark ? PlayerColors.surface : AppColors.surface,
-      elevation: 0,
-      title: Row(
-        children: [
-          Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(
-              color: isDark ? PlayerColors.accentDim : AppColors.primary,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(isDark ? '⚡' : '⚽', style: const TextStyle(fontSize: 16)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text('LANISTA', style: TextStyle(
-            color: accent, fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 16,
-          )),
-        ],
-      ),
-      actions: [
-        NotificationBell(iconColor: isDark ? PlayerColors.textSecondary : AppColors.textPrimary),
-        IconButton(
-          icon: CircleAvatar(
-            radius: 16,
-            backgroundColor: isDark ? PlayerColors.accentDim : AppColors.primaryContainer,
-            child: Text(
-              _firstName.isNotEmpty ? _firstName[0].toUpperCase() : 'P',
-              style: TextStyle(color: accent, fontWeight: FontWeight.w700, fontSize: 14),
-            ),
-          ),
-          onPressed: () => _showProfileMenu(context, isDark),
-        ),
-        const SizedBox(width: 8),
-      ],
-    );
-
+  Widget _buildScaffold(BuildContext context) {
     final hasUnread = _unreadCount > 0;
     final badgeLabel = _unreadCount > 9 ? '9+' : '$_unreadCount';
-    final badgeColor = isDark ? PlayerColors.accent : AppColors.primary;
-    final badgeFg = isDark ? PlayerColors.textOnAccent : Colors.white;
-
-    // Helper: wrap icon with unread badge for the Messages tab (index 4)
-    Widget msgIcon(IconData icon, {bool selected = false}) => Badge(
-          isLabelVisible: hasUnread,
-          label: Text(badgeLabel,
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-                  color: badgeFg)),
-          backgroundColor: badgeColor,
-          child: Icon(icon, color: selected ? accent : null),
-        );
-
-    if (isTablet) {
-      return Scaffold(
-        backgroundColor: isDark ? PlayerColors.background : AppColors.background,
-        appBar: appBar,
-        body: Row(
-          children: [
-            NavigationRail(
-              selectedIndex: _currentIndex,
-              onDestinationSelected: (i) {
-                setState(() => _currentIndex = i);
-                if (i == 4) setState(() => _unreadCount = 0); // optimistic clear
-              },
-              backgroundColor: isDark ? PlayerColors.surface : AppColors.surface,
-              indicatorColor: isDark ? PlayerColors.accentDim : AppColors.primaryContainer,
-              selectedIconTheme: IconThemeData(color: accent),
-              selectedLabelTextStyle: TextStyle(
-                  color: accent, fontWeight: FontWeight.w700, fontSize: 11),
-              unselectedLabelTextStyle: TextStyle(
-                  color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
-                  fontSize: 11),
-              labelType: NavigationRailLabelType.all,
-              destinations: [
-                NavigationRailDestination(icon: const Icon(Icons.home_outlined),           selectedIcon: const Icon(Icons.home),           label: Text(l10n.dashboard)),
-                NavigationRailDestination(icon: const Icon(Icons.compare_arrows_outlined), selectedIcon: const Icon(Icons.compare_arrows), label: Text(l10n.matches)),
-                NavigationRailDestination(icon: const Icon(Icons.map_outlined),            selectedIcon: const Icon(Icons.map),            label: Text(l10n.roadmap)),
-                NavigationRailDestination(icon: const Icon(Icons.search_outlined),         selectedIcon: const Icon(Icons.search),         label: Text(l10n.search)),
-                NavigationRailDestination(
-                  icon: msgIcon(Icons.chat_bubble_outline),
-                  selectedIcon: msgIcon(Icons.chat_bubble, selected: true),
-                  label: Text(l10n.messages),
-                ),
-              ],
-            ),
-            const VerticalDivider(width: 1, thickness: 1),
-            Expanded(child: _pages[_currentIndex]),
-          ],
-        ),
-      );
-    }
 
     return Scaffold(
-      backgroundColor: isDark ? PlayerColors.background : AppColors.background,
-      appBar: appBar,
-      body: _pages[_currentIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (i) {
-          setState(() => _currentIndex = i);
-          if (i == 4) setState(() => _unreadCount = 0); // optimistic clear
-        },
-        backgroundColor: isDark ? PlayerColors.surface : AppColors.surface,
-        indicatorColor: isDark ? PlayerColors.accentDim : AppColors.primaryContainer,
-        destinations: [
-          NavigationDestination(icon: const Icon(Icons.home_outlined),           selectedIcon: Icon(Icons.home,           color: accent), label: l10n.dashboard),
-          NavigationDestination(icon: const Icon(Icons.compare_arrows_outlined), selectedIcon: Icon(Icons.compare_arrows, color: accent), label: l10n.matches),
-          NavigationDestination(icon: const Icon(Icons.map_outlined),            selectedIcon: Icon(Icons.map,            color: accent), label: l10n.roadmap),
-          NavigationDestination(icon: const Icon(Icons.search_outlined),         selectedIcon: Icon(Icons.search,         color: accent), label: l10n.search),
-          NavigationDestination(
-            icon: msgIcon(Icons.chat_bubble_outline),
-            selectedIcon: msgIcon(Icons.chat_bubble, selected: true),
-            label: l10n.messages,
+      backgroundColor: PlayerColors.background,
+      extendBody: true,
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          _GenZHomeTab(
+            firstName: _firstName,
+            playerId: _playerId,
           ),
+          const PlayerSearchPage(),
+          const ConversationsPage(),
         ],
       ),
-    );
-  }
-
-  void _showProfileMenu(BuildContext context, bool isDark) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'player_film_fab',
+        backgroundColor: PlayerColors.accent,
+        foregroundColor: PlayerColors.textOnAccent,
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        onPressed: _openFilmPage,
+        child: const Icon(Icons.videocam_rounded, size: 26),
       ),
-      backgroundColor: isDark ? PlayerColors.surfaceElevated : Colors.white,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(Icons.person_outline, color: isDark ? PlayerColors.textPrimary : null),
-              title: Text('My Profile', style: TextStyle(color: isDark ? PlayerColors.textPrimary : null)),
-              onTap: () {
-                Navigator.pop(ctx);
-                context.push('/player/profile');
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.settings_outlined, color: isDark ? PlayerColors.textPrimary : null),
-              title: Text('Settings', style: TextStyle(color: isDark ? PlayerColors.textPrimary : null)),
-              onTap: () => Navigator.pop(ctx),
-            ),
-            ListTile(
-              leading: Icon(Icons.logout, color: isDark ? PlayerColors.error : AppColors.error),
-              title: Text('Sign Out', style: TextStyle(color: isDark ? PlayerColors.error : AppColors.error)),
-              onTap: () async {
-                await Supabase.instance.client.auth.signOut();
-                if (context.mounted) context.go('/auth/login', extra: {'skipBiometrics': true});
-              },
-            ),
-          ],
-        ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: _PlayerBottomBar(
+        currentIndex: _currentIndex,
+        hasUnread: hasUnread,
+        badgeLabel: badgeLabel,
+        onTap: (i) {
+          setState(() => _currentIndex = i);
+          if (i == 2) setState(() => _unreadCount = 0);
+        },
+        onProfile: _showProfileMenu,
       ),
     );
   }
 }
 
-class _PlayerHomeTab extends StatefulWidget {
-  final bool onboardingComplete;
-  final String firstName;
-  final void Function(int index) onNavigate;
+// ── Bottom bar ─────────────────────────────────────────────────────────────────
 
-  const _PlayerHomeTab({
-    this.onboardingComplete = false,
-    this.firstName = '',
-    required this.onNavigate,
+class _PlayerBottomBar extends StatelessWidget {
+  final int currentIndex;
+  final bool hasUnread;
+  final String badgeLabel;
+  final ValueChanged<int> onTap;
+  final VoidCallback onProfile;
+
+  const _PlayerBottomBar({
+    required this.currentIndex,
+    required this.hasUnread,
+    required this.badgeLabel,
+    required this.onTap,
+    required this.onProfile,
   });
 
   @override
-  State<_PlayerHomeTab> createState() => _PlayerHomeTabState();
+  Widget build(BuildContext context) {
+    return BottomAppBar(
+      color: PlayerColors.surface,
+      shape: const CircularNotchedRectangle(),
+      notchMargin: 6,
+      elevation: 8,
+      child: SizedBox(
+        height: 56,
+        child: Row(
+          children: [
+            _NavTile(
+              icon: Icons.home_outlined,
+              activeIcon: Icons.home_rounded,
+              label: 'Home',
+              selected: currentIndex == 0,
+              onTap: () => onTap(0),
+            ),
+            _NavTile(
+              icon: Icons.search_outlined,
+              activeIcon: Icons.search_rounded,
+              label: 'Search',
+              selected: currentIndex == 1,
+              onTap: () => onTap(1),
+            ),
+            const Spacer(), // notch space
+            _NavTile(
+              icon: Icons.chat_bubble_outline_rounded,
+              activeIcon: Icons.chat_bubble_rounded,
+              label: 'Messages',
+              selected: currentIndex == 2,
+              badge: hasUnread ? badgeLabel : null,
+              onTap: () => onTap(2),
+            ),
+            _NavTile(
+              icon: Icons.person_outline_rounded,
+              activeIcon: Icons.person_rounded,
+              label: 'Profile',
+              selected: false,
+              onTap: onProfile,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _PlayerHomeTabState extends State<_PlayerHomeTab> {
+class _NavTile extends StatelessWidget {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool selected;
+  final String? badge;
+  final VoidCallback onTap;
+
+  const _NavTile({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? PlayerColors.accent : PlayerColors.textTertiary;
+    Widget iconWidget = Icon(selected ? activeIcon : icon, color: color, size: 22);
+    if (badge != null) {
+      iconWidget = Badge(
+        label: Text(
+          badge!,
+          style: TextStyle(
+            fontSize: 9, fontWeight: FontWeight.w800,
+            color: PlayerColors.textOnAccent,
+          ),
+        ),
+        backgroundColor: Colors.red,
+        child: iconWidget,
+      );
+    }
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            iconWidget,
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Profile Menu Item ──────────────────────────────────────────────────────────
+
+class _ProfileMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool destructive;
+
+  const _ProfileMenuItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive ? Colors.redAccent : PlayerColors.textPrimary;
+    return ListTile(
+      leading: Icon(icon, color: color, size: 22),
+      title: Text(
+        label,
+        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 15),
+      ),
+      onTap: onTap,
+      minLeadingWidth: 20,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
+    );
+  }
+}
+
+// ── Gen Z Home Tab ─────────────────────────────────────────────────────────────
+
+enum _ActivityType { match, event, film }
+
+class _ActivityItem {
+  final _ActivityType type;
+  final String title;
+  final String subtitle;
+  final String? timestamp;
+
+  const _ActivityItem({
+    required this.type,
+    required this.title,
+    required this.subtitle,
+    this.timestamp,
+  });
+}
+
+class _GenZHomeTab extends StatefulWidget {
+  final String firstName;
+  final String playerId;
+
+  const _GenZHomeTab({required this.firstName, required this.playerId});
+
+  @override
+  State<_GenZHomeTab> createState() => _GenZHomeTabState();
+}
+
+class _GenZHomeTabState extends State<_GenZHomeTab> {
   int _matchCount = 0;
-  int _roadmapStepsCompleted = 0;
-  int _messageCount = 0;
+  int _filmCount = 0;
   int _profileViewCount = 0;
-  bool _statsLoaded = false;
+  bool _hasBio = false;
+  bool _hasClub = false;
+  List<Map<String, dynamic>> _topMatches = [];
+  List<_ActivityItem> _activityItems = [];
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    if (widget.playerId.isNotEmpty) _loadData();
   }
 
-  Future<void> _loadStats() async {
-    try {
-      // On Android the session may still be restoring — wait up to 3s for it
-      String? userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        userId = Supabase.instance.client.auth.currentUser?.id;
-      }
-      if (userId == null) return;
-
-      final playerResult = await Supabase.instance.client
-          .from('players')
-          .select('id')
-          .eq('user_id', userId)
-          .maybeSingle();
-      if (playerResult == null) return;
-      final playerId = playerResult['id'] as String;
-
-      final since30 = DateTime.now().subtract(const Duration(days: 30)).toIso8601String();
-      final results = await Future.wait([
-        Supabase.instance.client
-            .from('player_coach_matches')
-            .select('id')
-            .eq('player_id', playerId),
-        Supabase.instance.client
-            .from('player_roadmaps')
-            .select('roadmap_milestones(id)')
-            .eq('player_id', playerId)
-            .eq('roadmap_milestones.is_completed', true),
-        Supabase.instance.client
-            .from('conversations')
-            .select('id')
-            .eq('player_id', playerId),
-        Supabase.instance.client
-            .from('profile_views')
-            .select('coach_id')
-            .eq('player_id', playerId)
-            .gte('viewed_at', since30),
-      ]);
-
-      final matches = results[0] as List;
-      final roadmaps = results[1] as List;
-      int completedSteps = 0;
-      for (final r in roadmaps) {
-        final milestones = r['roadmap_milestones'] as List? ?? [];
-        completedSteps += milestones.length;
-      }
-      final convos = results[2] as List;
-      // Deduplicate views by coach_id
-      final viewCoaches = (results[3] as List).map((r) => r['coach_id']).toSet();
-
-      if (mounted) {
-        setState(() {
-          _matchCount = matches.length;
-          _roadmapStepsCompleted = completedSteps;
-          _messageCount = convos.length;
-          _profileViewCount = viewCoaches.length;
-          _statsLoaded = true;
-        });
-      }
-    } catch (e, st) {
-      debugPrint('Dashboard _loadStats error: $e\n$st');
-      if (mounted) setState(() => _statsLoaded = true);
+  @override
+  void didUpdateWidget(_GenZHomeTab old) {
+    super.didUpdateWidget(old);
+    if (old.playerId != widget.playerId && widget.playerId.isNotEmpty) {
+      _loadData();
     }
+  }
+
+  int get _exposureScore {
+    if (_loading) return 0;
+    final completeness = (_hasBio ? 10 : 0) + (_hasClub ? 10 : 0);
+    final filmPts = (_filmCount * 10).clamp(0, 20);
+    final matchPts = (_matchCount * 3).clamp(0, 30);
+    final viewPts = (_profileViewCount * 3).clamp(0, 30);
+    return (completeness + filmPts + matchPts + viewPts).clamp(0, 100);
+  }
+
+  Future<void> _loadData() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+
+    // Each query is independently fault-tolerant so one failure won't blank the screen.
+    Map<String, dynamic>? profile;
+    List<Map<String, dynamic>> topMatches = [];
+    int filmCount = 0;
+    int profileViewCount = 0;
+    int matchCount = 0;
+    Map<String, dynamic>? nextEvent;
+
+    try {
+      profile = await Supabase.instance.client
+          .from('players')
+          .select('bio, club_name')
+          .eq('id', widget.playerId)
+          .maybeSingle();
+    } catch (_) {}
+
+    try {
+      final data = await Supabase.instance.client
+          .from('player_coach_matches')
+          .select('total_score, last_computed_at, coaches!inner(id, school_name, division)')
+          .eq('player_id', widget.playerId)
+          .order('total_score', ascending: false)
+          .limit(5);
+      topMatches = List<Map<String, dynamic>>.from(data as List);
+    } catch (_) {}
+
+    try {
+      final films = await Supabase.instance.client
+          .from('player_videos')
+          .select('id')
+          .eq('player_id', widget.playerId)
+          .eq('video_type', 'game_film');
+      filmCount = (films as List).length;
+    } catch (_) {}
+
+    try {
+      final since30 = DateTime.now().subtract(const Duration(days: 30)).toIso8601String();
+      final views = await Supabase.instance.client
+          .from('profile_views')
+          .select('coach_id')
+          .eq('player_id', widget.playerId)
+          .gte('viewed_at', since30);
+      profileViewCount = (views as List).map((r) => r['coach_id']).toSet().length;
+    } catch (_) {}
+
+    try {
+      final all = await Supabase.instance.client
+          .from('player_coach_matches')
+          .select('id')
+          .eq('player_id', widget.playerId);
+      matchCount = (all as List).length;
+    } catch (_) {}
+
+    try {
+      final nowDate = DateTime.now().toIso8601String().substring(0, 10);
+      final events = await Supabase.instance.client
+          .from('league_events')
+          .select('event_name, start_date, city, state')
+          .gte('start_date', nowDate)
+          .order('start_date', ascending: true)
+          .limit(1);
+      if ((events as List).isNotEmpty) {
+        nextEvent = events[0] as Map<String, dynamic>;
+      }
+    } catch (_) {}
+
+    // Build activity feed
+    final items = <_ActivityItem>[];
+
+    for (final m in topMatches.take(3)) {
+      final coach = m['coaches'] as Map<String, dynamic>?;
+      if (coach == null) continue;
+      final score = (m['total_score'] as num? ?? 0).round();
+      items.add(_ActivityItem(
+        type: _ActivityType.match,
+        title: 'New match',
+        subtitle: '${coach['school_name']} at $score%',
+        timestamp: m['last_computed_at'] as String?,
+      ));
+    }
+
+    if (nextEvent != null) {
+      final startDate = DateTime.parse(nextEvent['start_date'] as String);
+      final daysUntil = startDate.difference(DateTime.now()).inDays;
+      items.add(_ActivityItem(
+        type: _ActivityType.event,
+        title: nextEvent['event_name'] as String,
+        subtitle: 'in $daysUntil days — ${nextEvent['city']}, ${nextEvent['state']}',
+      ));
+    }
+
+    if (filmCount < 2) {
+      items.add(_ActivityItem(
+        type: _ActivityType.film,
+        title: filmCount == 0 ? 'No game film yet' : 'Add more game film',
+        subtitle: 'Coaches with film are 3× more likely to match',
+      ));
+    }
+
+    if (mounted) {
+      setState(() {
+        _hasBio = (profile?['bio'] as String?)?.isNotEmpty ?? false;
+        _hasClub = (profile?['club_name'] as String?)?.isNotEmpty ?? false;
+        _topMatches = topMatches;
+        _matchCount = matchCount;
+        _filmCount = filmCount;
+        _profileViewCount = profileViewCount;
+        _activityItems = items;
+        _loading = false;
+      });
+    }
+  }
+
+  String get _greeting {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = PlayerThemeScope.isDark(context);
-    final isTablet = MediaQuery.of(context).size.width >= 700;
-    return isTablet ? _buildTablet(context, isDark) : _buildPhone(context, isDark);
-  }
+    final safePadding = MediaQuery.of(context).padding;
+    final name = widget.firstName.isNotEmpty ? widget.firstName : 'Player';
 
-  // ── Shared widgets ──────────────────────────────────────────────────────────
+    return CustomScrollView(
+      slivers: [
+        // ── Greeting header ────────────────────────────────────────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(18, safePadding.top + 14, 18, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _greeting,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: PlayerColors.textTertiary,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        '$name 👋',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                NotificationBell(iconColor: PlayerColors.textSecondary),
+              ],
+            ),
+          ),
+        ),
 
-  Widget _heroCard(BuildContext context, bool isDark) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(24),
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: isDark
-            ? [PlayerColors.gradientStart, PlayerColors.gradientEnd]
-            : [AppColors.primary, AppColors.primaryLight],
-        begin: Alignment.topLeft, end: Alignment.bottomRight,
-      ),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          widget.onboardingComplete && widget.firstName.isNotEmpty
-              ? 'Welcome back, ${widget.firstName}! 👋'
-              : 'Welcome to Lanista! 👋',
-          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          widget.onboardingComplete
-              ? 'Your profile is live. Coaches can discover you now.'
-              : 'Complete your profile to get matched with college programs.',
-          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
-        ),
-        const SizedBox(height: 20),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isDark ? PlayerColors.accent : Colors.white,
-            foregroundColor: isDark ? PlayerColors.textOnAccent : AppColors.primary,
-            minimumSize: const Size(0, 40),
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        // ── Exposure ring ──────────────────────────────────────────────────────
+        SliverToBoxAdapter(child: _ExposureHeroCard(
+          score: _exposureScore,
+          firstName: name,
+          loading: _loading,
+        )),
+
+        // ── Coach cards ────────────────────────────────────────────────────────
+        if (_topMatches.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: _SectionHeader(
+              title: '👀 Coaches watching you',
+              action: 'See all →',
+              onAction: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PlayerMatchesPage()),
+              ),
+            ),
           ),
-          onPressed: () => context.push(
-            widget.onboardingComplete ? '/player/profile' : '/player/profile/setup',
+          SliverToBoxAdapter(child: _CoachCardRow(matches: _topMatches)),
+        ],
+
+        // ── Activity feed ──────────────────────────────────────────────────────
+        if (_activityItems.isNotEmpty) ...[
+          const SliverToBoxAdapter(
+            child: _SectionHeader(title: 'Activity'),
           ),
-          child: Text(
-            widget.onboardingComplete ? 'View Profile' : 'Complete Profile',
-            style: const TextStyle(fontWeight: FontWeight.w700),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (ctx, i) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _ActivityCard(item: _activityItems[i]),
+                ),
+                childCount: _activityItems.length,
+              ),
+            ),
           ),
-        ),
+        ] else
+          SliverPadding(
+            padding: const EdgeInsets.only(bottom: 140),
+            sliver: const SliverToBoxAdapter(child: SizedBox()),
+          ),
       ],
-    ),
-  );
-
-  List<Widget> _statCards(bool isDark) => [
-    _StatCard(label: 'Program Matches', value: _statsLoaded ? '$_matchCount' : '—',
-        icon: Icons.compare_arrows,
-        color: isDark ? PlayerColors.accent : AppColors.primary,
-        onTap: () => widget.onNavigate(1)),
-    _StatCard(label: 'Roadmap Steps', value: _statsLoaded ? '$_roadmapStepsCompleted' : '—',
-        icon: Icons.map_outlined,
-        color: isDark ? PlayerColors.info : AppColors.secondary,
-        onTap: () => widget.onNavigate(2)),
-    _StatCard(label: 'Profile Views', value: _statsLoaded ? '$_profileViewCount' : '—',
-        icon: Icons.visibility_outlined,
-        color: isDark ? PlayerColors.warning : AppColors.coachColor,
-        onTap: () => context.push('/player/profile-views')),
-    _StatCard(label: 'Messages', value: _statsLoaded ? '$_messageCount' : '—',
-        icon: Icons.chat_bubble_outline,
-        color: isDark ? PlayerColors.success : AppColors.mentorColor,
-        onTap: () => widget.onNavigate(4)),
-  ];
-
-  List<Widget> _educationCards(bool isDark) => [
-    _EducationCard(title: 'The State of College Soccer Recruiting in 2026',
-        readTime: '5 min read', onTap: () => context.push('/education/e1')),
-    _EducationCard(title: 'D1 vs D2 vs D3: Which Is Right for You?',
-        readTime: '4 min read', onTap: () => context.push('/education/e2')),
-    _EducationCard(title: 'ID Camps: Genuine or Just a Money Grab?',
-        readTime: '6 min read', onTap: () => context.push('/education/e3')),
-    _EducationCard(title: 'See all articles →',
-        readTime: 'Education hub', onTap: () => context.push('/education')),
-  ];
-
-  // ── Phone layout ────────────────────────────────────────────────────────────
-
-  Widget _buildPhone(BuildContext context, bool isDark) {
-    final cards = _statCards(isDark);
-    final textColor = isDark ? PlayerColors.textPrimary : AppColors.textPrimary;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _heroCard(context, isDark),
-          const SizedBox(height: 24),
-          Text('Your Progress',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: textColor)),
-          const SizedBox(height: 12),
-          Row(children: [Expanded(child: cards[0]), const SizedBox(width: 12), Expanded(child: cards[1])]),
-          const SizedBox(height: 12),
-          Row(children: [Expanded(child: cards[2]), const SizedBox(width: 12), Expanded(child: cards[3])]),
-          const SizedBox(height: 24),
-          Text('Learn the Process',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: textColor)),
-          const SizedBox(height: 12),
-          ..._educationCards(isDark).map((c) => Padding(padding: const EdgeInsets.only(bottom: 8), child: c)),
-        ],
-      ),
-    );
-  }
-
-  // ── Tablet layout ───────────────────────────────────────────────────────────
-
-  Widget _buildTablet(BuildContext context, bool isDark) {
-    final cards = _statCards(isDark);
-    final textColor = isDark ? PlayerColors.textPrimary : AppColors.textPrimary;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Left column — hero + education
-          Expanded(
-            flex: 5,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _heroCard(context, isDark),
-                const SizedBox(height: 24),
-                Text('Learn the Process',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: textColor)),
-                const SizedBox(height: 12),
-                ..._educationCards(isDark).map((c) => Padding(padding: const EdgeInsets.only(bottom: 8), child: c)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 24),
-          // Right column — stat cards
-          Expanded(
-            flex: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Your Progress',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: textColor)),
-                const SizedBox(height: 12),
-                Row(children: [Expanded(child: cards[0]), const SizedBox(width: 12), Expanded(child: cards[1])]),
-                const SizedBox(height: 12),
-                Row(children: [Expanded(child: cards[2]), const SizedBox(width: 12), Expanded(child: cards[3])]),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final VoidCallback? onTap;
+// ── Exposure hero card ─────────────────────────────────────────────────────────
 
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    this.onTap,
+class _ExposureHeroCard extends StatelessWidget {
+  final int score;
+  final String firstName;
+  final bool loading;
+
+  const _ExposureHeroCard({
+    required this.score,
+    required this.firstName,
+    required this.loading,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = PlayerThemeScope.isDark(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-      padding: const EdgeInsets.all(16),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
       decoration: BoxDecoration(
-        color: isDark ? PlayerColors.surface : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? PlayerColors.border : AppColors.border),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0E0E0E), Color(0xFF111A07)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: PlayerColors.accent.withValues(alpha: 0.18)),
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(16),
+      child: Row(
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary,
+          _ExposureRing(score: score, loading: loading),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  firstName,
+                  style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    _Pill(label: 'Exposure Score', accent: true),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  loading
+                      ? 'Calculating…'
+                      : score >= 70
+                          ? 'Strong profile — coaches are finding you'
+                          : score >= 40
+                              ? 'Keep building — add film to boost your score'
+                              : 'Complete your profile to get discovered',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: PlayerColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-      ),
       ),
     );
   }
 }
 
-class _EducationCard extends StatelessWidget {
+class _Pill extends StatelessWidget {
+  final String label;
+  final bool accent;
+
+  const _Pill({required this.label, this.accent = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: accent
+            ? PlayerColors.accent.withValues(alpha: 0.15)
+            : const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: accent ? PlayerColors.accent : PlayerColors.textTertiary,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Exposure ring (arc painter) ────────────────────────────────────────────────
+
+class _ExposureRing extends StatelessWidget {
+  final int score;
+  final bool loading;
+
+  const _ExposureRing({required this.score, required this.loading});
+
+  static const double _size = 80;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: _size,
+      height: _size,
+      child: CustomPaint(
+        painter: _ArcPainter(score: loading ? 0 : score),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                loading ? '—' : '$score',
+                style: TextStyle(
+                  fontSize: _size * 0.27,
+                  fontWeight: FontWeight.w900,
+                  color: PlayerColors.accent,
+                  height: 1,
+                ),
+              ),
+              Text(
+                'EXPOSURE',
+                style: TextStyle(
+                  fontSize: _size * 0.09,
+                  fontWeight: FontWeight.w700,
+                  color: PlayerColors.accent.withValues(alpha: 0.55),
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArcPainter extends CustomPainter {
+  final int score;
+  _ArcPainter({required this.score});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 6;
+    const startAngle = -pi / 2; // top
+
+    // Background arc
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle, 2 * pi, false,
+      Paint()
+        ..color = const Color(0xFF1A2A0A)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6
+        ..strokeCap = StrokeCap.round,
+    );
+
+    // Foreground arc
+    if (score > 0) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        2 * pi * (score / 100),
+        false,
+        Paint()
+          ..color = const Color(0xFFC8F135)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 6
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ArcPainter old) => old.score != score;
+}
+
+// ── Section header ─────────────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
   final String title;
-  final String readTime;
+  final String? action;
+  final VoidCallback? onAction;
+
+  const _SectionHeader({required this.title, this.action, this.onAction});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white,
+              ),
+            ),
+          ),
+          if (action != null)
+            GestureDetector(
+              onTap: onAction,
+              child: Text(
+                action!,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: PlayerColors.accent,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Coach cards (horizontal scroll) ───────────────────────────────────────────
+
+class _CoachCardRow extends StatelessWidget {
+  final List<Map<String, dynamic>> matches;
+
+  const _CoachCardRow({required this.matches});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 140,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: matches.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (ctx, i) {
+          final m = matches[i];
+          final coach = m['coaches'] as Map<String, dynamic>;
+          final score = (m['total_score'] as num? ?? 0).round();
+          final isHot = i == 0 && score >= 75;
+          return _CoachCard(
+            schoolName: coach['school_name'] as String? ?? '',
+            division: coach['division'] as String? ?? '',
+            matchPct: score,
+            isHot: isHot,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PlayerMatchesPage()),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CoachCard extends StatelessWidget {
+  final String schoolName;
+  final String division;
+  final int matchPct;
+  final bool isHot;
   final VoidCallback onTap;
 
-  const _EducationCard({
-    required this.title,
-    required this.readTime,
+  const _CoachCard({
+    required this.schoolName,
+    required this.division,
+    required this.matchPct,
+    required this.isHot,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = PlayerThemeScope.isDark(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        width: 110,
         decoration: BoxDecoration(
-          color: isDark ? PlayerColors.surface : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isDark ? PlayerColors.border : AppColors.border),
+          color: const Color(0xFF111111),
+          border: Border.all(
+            color: isHot
+                ? PlayerColors.accent.withValues(alpha: 0.4)
+                : const Color(0xFF1E1E1E),
+          ),
+          borderRadius: BorderRadius.circular(18),
         ),
-        child: Row(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        child: Stack(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: isDark ? PlayerColors.accentDim : AppColors.primaryContainer,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Center(
-                child: Text('📚', style: TextStyle(fontSize: 20)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
-                    ),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D2A0D),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 4),
+                  child: const Center(
+                    child: Text('🎓', style: TextStyle(fontSize: 20)),
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  schoolName,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white,
+                  ),
+                ),
+                if (division.isNotEmpty) ...[
+                  const SizedBox(height: 2),
                   Text(
-                    readTime,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? PlayerColors.textTertiary : AppColors.textTertiary,
-                    ),
+                    division,
+                    style: TextStyle(fontSize: 9, color: PlayerColors.textTertiary),
                   ),
                 ],
-              ),
+                const SizedBox(height: 6),
+                Text(
+                  '$matchPct%',
+                  style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.w900, color: PlayerColors.accent,
+                  ),
+                ),
+                Text(
+                  'match',
+                  style: TextStyle(fontSize: 8, color: PlayerColors.textTertiary),
+                ),
+              ],
             ),
-            Icon(Icons.chevron_right, color: isDark ? PlayerColors.textTertiary : AppColors.textTertiary),
+            if (isHot)
+              Positioned(
+                top: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: PlayerColors.accent,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: const Text(
+                    'HOT',
+                    style: TextStyle(
+                      fontSize: 7, fontWeight: FontWeight.w900, color: Color(0xFF0A0A0A),
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
+  }
+}
+
+// ── Activity feed card ─────────────────────────────────────────────────────────
+
+class _ActivityCard extends StatelessWidget {
+  final _ActivityItem item;
+
+  const _ActivityCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final isMatch = item.type == _ActivityType.match;
+    final isEvent = item.type == _ActivityType.event;
+
+    final iconBg = isMatch
+        ? PlayerColors.accent.withValues(alpha: 0.1)
+        : isEvent
+            ? const Color(0xFF1A1000)
+            : const Color(0xFF001020);
+    final iconEmoji = isMatch ? '🏆' : isEvent ? '📅' : '🎬';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isMatch
+            ? PlayerColors.accent.withValues(alpha: 0.04)
+            : const Color(0xFF0E0E0E),
+        border: Border.all(
+          color: isMatch
+              ? PlayerColors.accent.withValues(alpha: 0.2)
+              : const Color(0xFF1A1A1A),
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(9)),
+            child: Center(child: Text(iconEmoji, style: const TextStyle(fontSize: 15))),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    style: const TextStyle(fontSize: 12, color: Color(0xFFBBBBBB), height: 1.3),
+                    children: [
+                      TextSpan(
+                        text: '${item.title}: ',
+                        style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+                      ),
+                      TextSpan(
+                        text: item.subtitle,
+                        style: isMatch
+                            ? TextStyle(
+                                color: PlayerColors.accent, fontWeight: FontWeight.w700)
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+                if (item.timestamp != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatTimestamp(item.timestamp!),
+                    style: TextStyle(fontSize: 10, color: PlayerColors.textTertiary),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, size: 16, color: Color(0xFF2A2A2A)),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimestamp(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final diff = DateTime.now().difference(dt);
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      return '${diff.inDays}d ago';
+    } catch (_) {
+      return '';
+    }
   }
 }

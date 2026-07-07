@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:app_links/app_links.dart';
 import 'core/di/injection.dart';
+import 'core/config/app_config_service.dart';
 import 'app.dart';
 
 Future<void> main() async {
@@ -41,6 +42,9 @@ Future<void> main() async {
 
   // Initialize dependency injection
   await configureDependencies();
+
+  // Fetch remote feature flags (coach_access_enabled, etc.)
+  await AppConfigService.fetch();
 
   runApp(const LanistaApp());
 }

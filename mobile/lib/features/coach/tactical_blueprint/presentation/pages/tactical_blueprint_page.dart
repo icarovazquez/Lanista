@@ -28,9 +28,11 @@ class _TacticalBlueprintPageState extends State<TacticalBlueprintPage> {
   final _teamNameCtrl = TextEditingController();
   final _schoolCtrl = TextEditingController();
 
-  // Step 2 — Position Requirements (per-position quality cards)
+  // Step 2 — Position Requirements (per-position quality cards + structured requirements)
   // Map<positionId, List<qualityId>>
   final Map<String, List<String>> _positionQualities = {};
+  // Map<positionId, structured requirements>
+  final Map<String, Map<String, dynamic>> _positionStructured = {};
 
   // Step 3 — Roster Map (graduation years per position)
   // Map<positionId, {year: int, needs_recruit: bool}>
@@ -180,12 +182,25 @@ class _TacticalBlueprintPageState extends State<TacticalBlueprintPage> {
           .eq('coach_id', coachId);
       final posReqRows = _positionQualities.entries
           .where((e) => e.value.isNotEmpty)
-          .map((e) => {
-                'coach_id': coachId,
-                'position_key': e.key,
-                'required_qualities': e.value,
-                'is_published': true,
-              })
+          .map((e) {
+            final structured = _positionStructured[e.key] ?? {};
+            return {
+              'coach_id':           coachId,
+              'position_key':       e.key,
+              'required_qualities': e.value,
+              'is_published':       true,
+              if (structured['min_height_cm'] != null)
+                'min_height_cm':      structured['min_height_cm'],
+              if (structured['preferred_foot'] != null)
+                'preferred_foot':     structured['preferred_foot'],
+              if (structured['min_speed_rating'] != null)
+                'min_speed_rating':   structured['min_speed_rating'],
+              if (structured['min_gpa'] != null)
+                'min_gpa':            structured['min_gpa'],
+              if (structured['min_physical_build'] != null)
+                'min_physical_build': structured['min_physical_build'],
+            };
+          })
           .toList();
       if (posReqRows.isNotEmpty) {
         await Supabase.instance.client
@@ -345,7 +360,8 @@ class _TacticalBlueprintPageState extends State<TacticalBlueprintPage> {
   }
 
   void _showPositionRequirementsSheet(BlueprintPosition position) {
-    final currentQualities = _positionQualities[position.positionId] ?? [];
+    final currentQualities  = _positionQualities[position.positionId] ?? [];
+    final currentStructured = _positionStructured[position.positionId] ?? {};
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -354,8 +370,22 @@ class _TacticalBlueprintPageState extends State<TacticalBlueprintPage> {
         position: position,
         allQualities: TacticalBlueprintData.qualities,
         selectedQualities: List.from(currentQualities),
-        onSaved: (selected) {
-          setState(() => _positionQualities[position.positionId] = selected);
+        minHeightCm:      currentStructured['min_height_cm'] as int?,
+        preferredFoot:    currentStructured['preferred_foot'] as String?,
+        minSpeedRating:   currentStructured['min_speed_rating'] as int?,
+        minGpa:           currentStructured['min_gpa'] as double?,
+        minPhysicalBuild: currentStructured['min_physical_build'] as String?,
+        onSaved: (qualities, minHeight, foot, speed, gpa, build) {
+          setState(() {
+            _positionQualities[position.positionId] = qualities;
+            _positionStructured[position.positionId] = {
+              if (minHeight != null) 'min_height_cm': minHeight,
+              if (foot != null)      'preferred_foot': foot,
+              if (speed != null)     'min_speed_rating': speed,
+              if (gpa != null)       'min_gpa': gpa,
+              if (build != null)     'min_physical_build': build,
+            };
+          });
         },
       ),
     );

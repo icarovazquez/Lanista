@@ -1,0 +1,166 @@
+[
+  {
+    "_note": "school_name MUST match exactly what is in the coaches table. Verify roster URLs in a browser before running — Sidearm URLs occasionally change paths.",
+    "school_name": "University of North Carolina",
+    "roster_url": "https://goheels.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "NC",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Stanford University",
+    "roster_url": "https://gostanford.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "CA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Indiana University",
+    "roster_url": "https://iuhoosiers.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "IN",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Wake Forest University",
+    "roster_url": "https://godeacs.com/sports/mens-soccer/roster/2025",
+    "gender": "men",
+    "division": "D1",
+    "state": "NC",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Georgetown University",
+    "roster_url": "https://guhoyas.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "DC",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Clemson University",
+    "roster_url": "https://clemsontigers.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "SC",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Virginia",
+    "roster_url": "https://virginiasports.com/sports/msoc/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "VA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Syracuse University",
+    "roster_url": "https://cuse.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "NY",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Grand Canyon University",
+    "roster_url": "https://gculopes.com/sports/mens-soccer/roster/2025",
+    "gender": "men",
+    "division": "D2",
+    "state": "AZ",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Cal Poly San Luis Obispo",
+    "roster_url": "https://gopoly.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "CA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Nova Southeastern University",
+    "roster_url": "https://nsusharks.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "FL",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Wheeling University",
+    "roster_url": "https://wucardinals.com/sports/mens-soccer/roster/2025",
+    "gender": "men",
+    "division": "D2",
+    "state": "WV",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Lynn University",
+    "roster_url": "https://lynnfightingknights.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "FL",
+    "platform": "sidearm",
+    "_verify": "URL may differ — verify in browser."
+  },
+  {
+    "school_name": "Davis & Elkins College",
+    "roster_url": "https://senatornation.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "WV",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Williams College",
+    "roster_url": "https://ephsports.williams.edu/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "MA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Amherst College",
+    "roster_url": "https://athletics.amherst.edu/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "MA",
+    "platform": "other",
+    "_verify": "D3 NESCAC — likely not Sidearm."
+  },
+  {
+    "school_name": "Middlebury College",
+    "roster_url": "https://athletics.middlebury.edu/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "VT",
+    "platform": "other",
+    "_verify": "D3 NESCAC — likely not Sidearm."
+  },
+  {
+    "school_name": "Tufts University",
+    "roster_url": "https://gotuftsjumbos.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "MA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Lindsey Wilson College",
+    "roster_url": "https://lindseyathletics.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "NAIA",
+    "state": "KY",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Benedictine University",
+    "roster_url": "https://benueagles.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "NAIA",
+    "state": "IL",
+    "platform": "sidearm"
+  }
+]
