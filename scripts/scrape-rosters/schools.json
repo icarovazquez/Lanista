@@ -14,7 +14,14 @@
     "gender": "men",
     "division": "D1",
     "state": "CA",
-    "platform": "sidearm"
+    "platform": "sidearm",
+    "_note": "Staff directory doesn't expose coaches per-sport cleanly; using manual data verified July 2026.",
+    "manual_staff": [
+      {"name": "Jeremy Gunn", "title": "Head Coach", "email": "smsoccer@stanford.edu"},
+      {"name": "Drew Hutchins", "title": "Associate Head Coach", "email": "smsoccer@stanford.edu"},
+      {"name": "Kevin McCarthy", "title": "Assistant Coach", "email": "smsoccer@stanford.edu"},
+      {"name": "Woo Jeon", "title": "Assistant Coach", "email": "smsoccer@stanford.edu"}
+    ]
   },
   {
     "school_name": "Indiana University",
@@ -46,7 +53,11 @@
     "gender": "men",
     "division": "D1",
     "state": "SC",
-    "platform": "sidearm"
+    "platform": "sidearm",
+    "_note": "Staff directory lists Phil Jones (Associate HC) under msoccer@clemson.edu; HC not separately listed. Manual data verified July 2026.",
+    "manual_staff": [
+      {"name": "Phil Jones", "title": "Associate Head Coach", "email": "msoccer@clemson.edu"}
+    ]
   },
   {
     "school_name": "University of Virginia",
@@ -54,7 +65,12 @@
     "gender": "men",
     "division": "D1",
     "state": "VA",
-    "platform": "sidearm"
+    "platform": "sidearm",
+    "_note": "Staff directory lists Head Coach + Associate HC. Manual data verified July 2026.",
+    "manual_staff": [
+      {"name": "George Gelnovatch", "title": "Head Coach", "email": "Vrp9as@virginia.edu"},
+      {"name": "Matt Chulis", "title": "Associate Head Coach", "email": "mrc5r@virginia.edu"}
+    ]
   },
   {
     "school_name": "Syracuse University",
@@ -116,10 +132,12 @@
   {
     "school_name": "Williams College",
     "roster_url": "https://ephsports.williams.edu/sports/mens-soccer/roster",
+    "staff_url": "https://ephsports.williams.edu/sports/msoc/coaches",
     "gender": "men",
     "division": "D3",
     "state": "MA",
-    "platform": "sidearm"
+    "platform": "sidearm",
+    "_note": "mens-soccer/coaches times out; msoc/coaches works."
   },
   {
     "school_name": "Amherst College",
@@ -158,9 +176,11 @@
   {
     "school_name": "Benedictine University",
     "roster_url": "https://benueagles.com/sports/mens-soccer/roster",
+    "staff_url": "https://athletics.ben.edu/sports/msoc/coaches",
     "gender": "men",
     "division": "NAIA",
     "state": "IL",
-    "platform": "sidearm"
+    "platform": "sidearm",
+    "_note": "Athletic site is on athletics.ben.edu, not benueagles.com."
   }
 ]

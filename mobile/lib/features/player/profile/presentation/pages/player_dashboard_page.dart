@@ -633,7 +633,21 @@ class _GenZHomeTabState extends State<_GenZHomeTab> {
               delegate: SliverChildBuilderDelegate(
                 (ctx, i) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _ActivityCard(item: _activityItems[i]),
+                  child: _ActivityCard(
+                    item: _activityItems[i],
+                    onTap: () {
+                      if (_activityItems[i].type == _ActivityType.match) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const PlayerMatchesPage()),
+                        );
+                      } else if (_activityItems[i].type == _ActivityType.film) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const PlayerGameFilmPage()),
+                        );
+                      }
+                      // events: no detail page yet, tap does nothing
+                    },
+                  ),
                 ),
                 childCount: _activityItems.length,
               ),
@@ -1018,8 +1032,9 @@ class _CoachCard extends StatelessWidget {
 
 class _ActivityCard extends StatelessWidget {
   final _ActivityItem item;
+  final VoidCallback? onTap;
 
-  const _ActivityCard({required this.item});
+  const _ActivityCard({required this.item, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1032,8 +1047,11 @@ class _ActivityCard extends StatelessWidget {
             ? const Color(0xFF1A1000)
             : const Color(0xFF001020);
     final iconEmoji = isMatch ? '🏆' : isEvent ? '📅' : '🎬';
+    final tappable = onTap != null && item.type != _ActivityType.event;
 
-    return Container(
+    return GestureDetector(
+      onTap: tappable ? onTap : null,
+      child: Container(
       decoration: BoxDecoration(
         color: isMatch
             ? PlayerColors.accent.withValues(alpha: 0.04)
@@ -1086,9 +1104,14 @@ class _ActivityCard extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, size: 16, color: Color(0xFF2A2A2A)),
+          Icon(
+            Icons.chevron_right,
+            size: 16,
+            color: tappable ? PlayerColors.textTertiary : const Color(0xFF2A2A2A),
+          ),
         ],
       ),
+    ),
     );
   }
 

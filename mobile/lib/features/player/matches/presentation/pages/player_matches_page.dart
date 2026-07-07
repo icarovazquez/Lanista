@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../../../core/theme/app_colors.dart';
 import '../../../../../../core/theme/player_colors.dart';
 import '../../../../../../core/theme/player_theme_data.dart';
@@ -65,7 +66,7 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
               school_name,
               division,
               primary_formation,
-              users(first_name, last_name)
+              users(first_name, last_name, email)
             )
           ''')
           .eq('player_id', playerId)
@@ -434,6 +435,7 @@ class _MatchCard extends StatelessWidget {
     final division = coach['division'] as String? ?? '';
     final formation = coach['primary_formation'] as String? ?? '';
     final coachName = '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim();
+    final coachEmail = user['email'] as String? ?? '';
     final totalScore    = ((match['total_score']    as num?) ?? 0).round();
     final tacticalScore = ((match['tactical_score'] as num?) ?? 0).round();
     final positionScore = ((match['position_score'] as num?) ?? 0).round();
@@ -708,6 +710,7 @@ class _MatchCard extends StatelessWidget {
                           division: division,
                           formation: formation,
                           coachName: coachName,
+                          coachEmail: coachEmail,
                           totalScore: totalScore,
                           tacticalScore: tacticalScore,
                           positionScore: positionScore,
@@ -726,81 +729,33 @@ class _MatchCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: ElevatedButton(
+                  child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(0, 36),
                       backgroundColor: isDark ? PlayerColors.accent : AppColors.primary,
                       foregroundColor: isDark ? PlayerColors.textOnAccent : Colors.white,
                     ),
-                    onPressed: () async {
-                      final supabase = Supabase.instance.client;
-                      final userId = supabase.auth.currentUser?.id;
-                      if (userId == null) return;
-
-                      // Look up players.id (≠ auth uid)
-                      final playerRow = await supabase
-                          .from('players')
-                          .select('id')
-                          .eq('user_id', userId)
-                          .maybeSingle();
-                      if (playerRow == null) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text(
-                                    'Complete your player profile first')));
-                        }
-                        return;
-                      }
-                      final playerId = playerRow['id'] as String;
-                      final coachId = coach['id'] as String? ?? '';
-
-                      // Find or create conversation
-                      final existing = await supabase
-                          .from('conversations')
-                          .select('id')
-                          .eq('player_id', playerId)
-                          .eq('coach_id', coachId)
-                          .maybeSingle();
-
-                      String conversationId;
-                      if (existing != null) {
-                        conversationId = existing['id'] as String;
-                        // Re-open contact window if it was closed
-                        await supabase
-                            .from('conversations')
-                            .update({'contact_window_valid': true})
-                            .eq('id', conversationId);
-                      } else {
-                        final newConv = await supabase
-                            .from('conversations')
-                            .insert({
-                              'player_id': playerId,
-                              'coach_id': coachId,
-                              'initiated_by': 'player',
-                              'contact_window_valid': true,
-                            })
-                            .select('id')
-                            .single();
-                        conversationId = newConv['id'] as String;
-                      }
-
-                      if (context.mounted) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ConversationDetailPage(
-                              conversationId: conversationId,
-                              otherUserId: coachId,
-                              otherUserName: coachName,
-                              otherUserRole: 'coach',
-                              isDark: PlayerThemeScope.isDark(context),
-                            ),
-                          ),
+                    icon: const Icon(Icons.email_outlined, size: 14),
+                    onPressed: coachEmail.isEmpty ? null : () async {
+                      final uri = Uri(
+                        scheme: 'mailto',
+                        path: coachEmail,
+                        queryParameters: {
+                          'subject': 'Recruiting Inquiry — ${schoolName}',
+                        },
+                      );
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri);
+                      } else if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('No email app found. Coach email: $coachEmail')),
                         );
                       }
                     },
-                    child: const Text('Message Coach', style: TextStyle(fontSize: 12)),
+                    label: Text(
+                      coachEmail.isEmpty ? 'No Email on File' : 'Email Coach',
+                      style: const TextStyle(fontSize: 12),
+                    ),
                   ),
                 ),
               ],
@@ -819,6 +774,7 @@ class _ProgramDetailSheet extends StatelessWidget {
   final String division;
   final String formation;
   final String coachName;
+  final String coachEmail;
   final int totalScore;
   final int tacticalScore;
   final int positionScore;
@@ -835,6 +791,7 @@ class _ProgramDetailSheet extends StatelessWidget {
     required this.division,
     required this.formation,
     required this.coachName,
+    required this.coachEmail,
     required this.totalScore,
     required this.tacticalScore,
     required this.positionScore,

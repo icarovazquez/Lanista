@@ -1,0 +1,392 @@
+[
+  {
+    "school_name": "University of North Carolina",
+    "staff": [
+      {
+        "name": "Carlos Somoano",
+        "title": "Head Coach",
+        "email": "csomoano@uncaa.unc.edu"
+      },
+      {
+        "name": "Michael Callahan",
+        "title": "Assistant Coach",
+        "email": "mbcallah@unc.edu"
+      },
+      {
+        "name": "Michael Harrington",
+        "title": "Assistant Coach",
+        "email": "mrharrin@live.unc.edu"
+      },
+      {
+        "name": "Jeff Negalha",
+        "title": "Assistant Coach",
+        "email": "negalha@unc.edu"
+      }
+    ],
+    "staff_url": "https://goheels.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Stanford University",
+    "staff": [
+      {
+        "name": "Jeremy Gunn",
+        "title": "Head Coach",
+        "email": "smsoccer@stanford.edu"
+      },
+      {
+        "name": "Drew Hutchins",
+        "title": "Associate Head Coach",
+        "email": "smsoccer@stanford.edu"
+      },
+      {
+        "name": "Kevin McCarthy",
+        "title": "Assistant Coach",
+        "email": "smsoccer@stanford.edu"
+      },
+      {
+        "name": "Woo Jeon",
+        "title": "Assistant Coach",
+        "email": "smsoccer@stanford.edu"
+      }
+    ],
+    "staff_url": "[manual]"
+  },
+  {
+    "school_name": "Indiana University",
+    "staff": [
+      {
+        "name": "Christian Lomeli",
+        "title": "Assistant Coach",
+        "email": "clomeli@iu.edu"
+      },
+      {
+        "name": "Tanner Thompson",
+        "title": "Assistant Coach",
+        "email": "tannthom@iu.edu"
+      },
+      {
+        "name": "Jacob Bushue",
+        "title": "Assistant Coach",
+        "email": "jbushue@iu.edu"
+      }
+    ],
+    "staff_url": "https://iuhoosiers.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Wake Forest University",
+    "staff": [
+      {
+        "name": "Bobby Muuss",
+        "title": "Head Coach",
+        "email": "muussrp@wfu.edu"
+      },
+      {
+        "name": "Dane Brenner",
+        "title": "Associate Head Coach/Director of Recruiting & Player Identification/Director of Goalkeeping",
+        "email": "brennerd@wfu.edu"
+      },
+      {
+        "name": "Zack Schilawski",
+        "title": "Assistant Coach/Director of Player Development",
+        "email": "schilazj@wfu.edu"
+      },
+      {
+        "name": "Ade Taiwo",
+        "title": "Assistant Coach/Director of Community Soccer Engagement & Player Welfare",
+        "email": "taiwoa@wfu.edu"
+      }
+    ],
+    "staff_url": "https://godeacs.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Georgetown University",
+    "staff": [
+      {
+        "name": "Head Coach",
+        "title": "202-687-2364202-687-2364",
+        "email": "gumenssoccer@georgetown.edu"
+      },
+      {
+        "name": "Assistant Coach",
+        "title": "TBATBA",
+        "email": "mm5289@georgetown.edu"
+      }
+    ],
+    "staff_url": "https://guhoyas.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Clemson University",
+    "staff": [
+      {
+        "name": "Phil Jones",
+        "title": "Associate Head Coach",
+        "email": "msoccer@clemson.edu"
+      }
+    ],
+    "staff_url": "[manual]"
+  },
+  {
+    "school_name": "University of Virginia",
+    "staff": [
+      {
+        "name": "George Gelnovatch",
+        "title": "Head Coach",
+        "email": "Vrp9as@virginia.edu"
+      },
+      {
+        "name": "Matt Chulis",
+        "title": "Associate Head Coach",
+        "email": "mrc5r@virginia.edu"
+      }
+    ],
+    "staff_url": "[manual]"
+  },
+  {
+    "school_name": "Syracuse University",
+    "staff": [
+      {
+        "name": "Ian McIntyre",
+        "title": "Head Coach",
+        "email": "ismcinty@syr.edu"
+      },
+      {
+        "name": "Jukka Masalin",
+        "title": "Associate Head Coach",
+        "email": "jmasalin@syr.edu"
+      },
+      {
+        "name": "Matty Evans",
+        "title": "Assistant Coach",
+        "email": "cevans21@syr.edu"
+      }
+    ],
+    "staff_url": "https://cuse.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Grand Canyon University",
+    "staff": [
+      {
+        "name": "Jamie Davies",
+        "title": "Head Coach",
+        "email": "jamie.davies@gcu.edu"
+      },
+      {
+        "name": "Craig McCall",
+        "title": "Assistant Coach",
+        "email": "craig.mccall@gcu.edu"
+      },
+      {
+        "name": "Michael Garrihy",
+        "title": "Assistant Coach",
+        "email": "michael.garrihy@gcu.edu"
+      }
+    ],
+    "staff_url": "https://gculopes.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Cal Poly San Luis Obispo",
+    "staff": [
+      {
+        "name": "Oige Kennedy",
+        "title": "Men's Soccer Head Coach",
+        "email": "mensoccer@calpoly.edu"
+      },
+      {
+        "name": "Zach Watson",
+        "title": "Assistant Coach",
+        "email": "zwatso01@calpoly.edu"
+      },
+      {
+        "name": "Brandon Bautista",
+        "title": "Assistant Coach",
+        "email": "bbauti11@calpoly.edu"
+      }
+    ],
+    "staff_url": "https://gopoly.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Nova Southeastern University",
+    "staff": [
+      {
+        "name": "Head Men's Soccer Coach",
+        "title": "mmcarthu@nova.edu",
+        "email": "mmcarthu@nova.edu"
+      },
+      {
+        "name": "Assistant Men's Soccer Coach",
+        "title": "mperezba@nova.edu",
+        "email": "mperezba@nova.edu"
+      }
+    ],
+    "staff_url": "https://nsusharks.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Wheeling University",
+    "staff": [
+      {
+        "name": "Head Men's Soccer Coach",
+        "title": "",
+        "email": "bregan@wheeling.edu"
+      },
+      {
+        "name": "Graduate Assistant Men's Soccer Coach",
+        "title": "",
+        "email": "cmolinacuriel954@cardinal.wheeling.edu"
+      }
+    ],
+    "staff_url": "https://wucardinals.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Lynn University",
+    "staff": [
+      {
+        "name": "Head Men's Soccer Coach",
+        "title": "(561) 237-7245(561) 237-7245",
+        "email": "jrootes@lynn.edu"
+      },
+      {
+        "name": "Assistant Coach",
+        "title": "(561) 237-7103(561) 237-7103",
+        "email": "adesperito@lynn.edu"
+      }
+    ],
+    "staff_url": "https://lynnfightingknights.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Davis & Elkins College",
+    "staff": [
+      {
+        "name": "Meir Lewin",
+        "title": "Head Men's Soccer Coach",
+        "email": "lewinm@dewv.edu"
+      },
+      {
+        "name": "Remy Tazifor",
+        "title": "Assistant Men's Soccer Coach",
+        "email": "taziforr@dewv.edu"
+      },
+      {
+        "name": "Gadi  Vogel",
+        "title": "Assistant Men's Soccer Coach",
+        "email": "vogelg@dewv.edu"
+      }
+    ],
+    "staff_url": "https://senatornation.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Williams College",
+    "staff": [
+      {
+        "name": "Head Coach",
+        "title": "413-597-2601413-597-2601",
+        "email": "ss40@williams.edu"
+      },
+      {
+        "name": "Assistant Coach",
+        "title": "413-597-4348413-597-4348",
+        "email": "williamsmenssoccer@gmail.com"
+      }
+    ],
+    "staff_url": "https://ephsports.williams.edu/sports/msoc/coaches"
+  },
+  {
+    "school_name": "Amherst College",
+    "staff": [
+      {
+        "name": "Head Coach of Men's Soccer / Director of Amherst LEADS",
+        "title": "jserpone@amherst.edu",
+        "email": "jserpone@amherst.edu"
+      },
+      {
+        "name": "Assistant Coach, Men's Soccer",
+        "title": "aortega@amherst.edu",
+        "email": "aortega@amherst.edu"
+      }
+    ],
+    "staff_url": "https://athletics.amherst.edu/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Middlebury College",
+    "staff": [
+      {
+        "name": "Head Men's Soccer Coach",
+        "title": "aelias@middlebury.edu",
+        "email": "aelias@middlebury.edu"
+      },
+      {
+        "name": "Assistant Men's Soccer Coach",
+        "title": "tp@middlebury.edu",
+        "email": "tp@middlebury.edu"
+      },
+      {
+        "name": "Assistant Men's Soccer Coach",
+        "title": "bpotter@middlebury.edu",
+        "email": "bpotter@middlebury.edu"
+      },
+      {
+        "name": "Assistant Men's Soccer Coach - Goalkeepers",
+        "title": "lagazo@middlebury.edu",
+        "email": "lagazo@middlebury.edu"
+      }
+    ],
+    "staff_url": "https://athletics.middlebury.edu/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Tufts University",
+    "staff": [
+      {
+        "name": "Head Coach",
+        "title": "617-627-5152617-627-5152",
+        "email": "menssoccer@tufts.edu"
+      },
+      {
+        "name": "Assistant Coach",
+        "title": "",
+        "email": "menssoccer@tufts.edu"
+      },
+      {
+        "name": "Assistant Coach",
+        "title": "",
+        "email": "menssoccer@tufts.edu"
+      },
+      {
+        "name": "Assistant Coach",
+        "title": "",
+        "email": "menssoccer@tufts.edu"
+      },
+      {
+        "name": "Assistant Coach",
+        "title": "",
+        "email": "menssoccer@tufts.edu"
+      }
+    ],
+    "staff_url": "https://gotuftsjumbos.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Lindsey Wilson College",
+    "staff": [
+      {
+        "name": "Head Coach",
+        "title": "buthelezis@lindsey.edu",
+        "email": "buthelezis@lindsey.edu"
+      }
+    ],
+    "staff_url": "https://lindseyathletics.com/sports/mens-soccer/coaches"
+  },
+  {
+    "school_name": "Benedictine University",
+    "staff": [
+      {
+        "name": "Head Coach",
+        "title": "630-829-6165630-829-6165",
+        "email": "spappas@ben.edu"
+      },
+      {
+        "name": "Assistant Coach",
+        "title": "",
+        "email": "akomperda@ben.edu"
+      }
+    ],
+    "staff_url": "https://athletics.ben.edu/sports/msoc/coaches"
+  }
+]
