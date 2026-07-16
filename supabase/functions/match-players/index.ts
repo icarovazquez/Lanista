@@ -59,6 +59,11 @@ interface CoachPositionRequirement {
   is_published: boolean
 }
 
+interface VideoAnalysis {
+  scout_rating: number                 // 1–10
+  college_level_projection: 'D1' | 'D2' | 'D3' | 'NAIA' | 'JUCO' | 'unknown'
+}
+
 interface RosterSlot {
   position_key: string
   slot_status: string
@@ -117,6 +122,20 @@ serve(async (req) => {
       )
     }
 
+    // 1b. Load latest film analysis (optional)
+    let videoAnalysis: VideoAnalysis | null = null
+    const { data: videoRow } = await supabase
+      .from('player_videos')
+      .select('analysis_result')
+      .eq('player_id', player.id)
+      .eq('analysis_status', 'complete')
+      .order('uploaded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (videoRow?.analysis_result) {
+      videoAnalysis = videoRow.analysis_result as VideoAnalysis
+    }
+
     // 2. Load all coaches with published requirements + roster slots
     const { data: coaches, error: coachErr } = await supabase
       .from('coaches')
@@ -156,7 +175,7 @@ serve(async (req) => {
     const matches = []
 
     for (const coach of coaches as Coach[]) {
-      const score = computeMatchScore(player as Player, coach)
+      const score = computeMatchScore(player as Player, coach, videoAnalysis)
       if (score.total >= 30) {
         matches.push({
           player_id: player.id,
@@ -167,6 +186,7 @@ serve(async (req) => {
           physical_score: Math.round(score.physical),
           academic_score: Math.round(score.academic),
           timeline_score: Math.round(score.timeline),
+          film_score: Math.round(score.filmScore * 100) / 100,
           match_reasons: score.reasons,
           match_reasons_es: score.reasonsEs,
           match_gaps: score.gaps,
@@ -219,13 +239,14 @@ interface ScoreBreakdown {
   physical: number
   academic: number
   timeline: number
+  filmScore: number
   reasons: string[]    // hits — what the player satisfies
   reasonsEs: string[]
   gaps: string[]       // misses — what's holding the score down
   gapsEs: string[]
 }
 
-function computeMatchScore(player: Player, coach: Coach): ScoreBreakdown {
+function computeMatchScore(player: Player, coach: Coach, film: VideoAnalysis | null): ScoreBreakdown {
   const reasons: string[] = []
   const reasonsEs: string[] = []
   const gaps: string[] = []
@@ -476,9 +497,51 @@ function computeMatchScore(player: Player, coach: Coach): ScoreBreakdown {
     }
   }
 
-  const total = tactical + position + physical + academic + timeline
+  // ── Film (up to 15 pts bonus) ─────────────────────────────────────────────
+  // scout_rating 1–10 → 0–10 pts (below 3 earns nothing)
+  // projection alignment with coach division → 0–5 pts
+  let filmScore = 0
 
-  return { total, tactical, position, physical, academic, timeline, reasons, reasonsEs, gaps, gapsEs }
+  if (film) {
+    const rating = film.scout_rating ?? 0
+    // Rating component: 0 at rating≤3, 10 at rating=10
+    const ratingPts = Math.max(0, Math.min(10, ((rating - 3) / 7) * 10))
+
+    // Projection alignment
+    const divOrder: Record<string, number> = { D1: 1, D2: 2, D3: 3, NAIA: 4, JUCO: 5 }
+    const projLevel = divOrder[film.college_level_projection?.toUpperCase() ?? ''] ?? 0
+    const coachLevel = coach.division ? (divOrder[coach.division.toUpperCase()] ?? 0) : 0
+    let projPts = 0
+    if (projLevel > 0 && coachLevel > 0) {
+      const diff = Math.abs(projLevel - coachLevel)
+      projPts = diff === 0 ? 5 : diff === 1 ? 3 : diff === 2 ? 1 : 0
+    }
+
+    filmScore = Math.min(15, ratingPts + projPts)
+
+    if (rating >= 8) {
+      reasons.push(`Film analysis: elite prospect (scout rating ${rating}/10)`)
+      reasonsEs.push(`Análisis de video: prospecto elite (calificación ${rating}/10)`)
+    } else if (rating >= 6) {
+      reasons.push(`Film analysis: strong prospect (scout rating ${rating}/10)`)
+      reasonsEs.push(`Análisis de video: prospecto destacado (calificación ${rating}/10)`)
+    } else if (rating >= 4) {
+      reasons.push(`Film reviewed — developing prospect (scout rating ${rating}/10)`)
+      reasonsEs.push(`Video revisado — prospecto en desarrollo (calificación ${rating}/10)`)
+    }
+
+    if (projPts === 5) {
+      reasons.push(`Film projects as ${film.college_level_projection} — matches this program's level`)
+      reasonsEs.push(`El video proyecta nivel ${film.college_level_projection} — coincide con el nivel de este programa`)
+    } else if (projPts === 3) {
+      reasons.push(`Film projects as ${film.college_level_projection} — close to this program's level`)
+      reasonsEs.push(`El video proyecta nivel ${film.college_level_projection} — cerca del nivel de este programa`)
+    }
+  }
+
+  const total = tactical + position + physical + academic + timeline + filmScore
+
+  return { total, tactical, position, physical, academic, timeline, filmScore, reasons, reasonsEs, gaps, gapsEs }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
