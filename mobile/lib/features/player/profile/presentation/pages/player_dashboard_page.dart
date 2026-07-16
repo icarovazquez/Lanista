@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'dart:math';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,10 +9,11 @@ import '../../../../../../core/theme/player_theme_data.dart';
 import '../../../../../../core/theme/player_theme_scope.dart';
 import '../../../../../../core/di/injection.dart';
 import '../../../../messaging/presentation/pages/conversations_page.dart';
-import '../../../search/presentation/pages/player_search_page.dart';
+import '../../../roadmap/presentation/pages/player_roadmap_page.dart';
 import '../../../matches/presentation/pages/player_matches_page.dart';
 import '../../../video/presentation/pages/player_game_film_page.dart';
 import '../../../../notifications/presentation/widgets/notification_bell.dart';
+import '../../../openings/presentation/pages/player_openings_page.dart';
 
 class PlayerDashboardPage extends StatefulWidget {
   const PlayerDashboardPage({super.key});
@@ -20,7 +23,7 @@ class PlayerDashboardPage extends StatefulWidget {
 }
 
 class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
-  int _currentIndex = 0; // 0=Home 1=Search 2=Messages
+  int _currentIndex = 0; // 0=Home 1=Roadmap 2=Openings 3=Messages
   String _firstName = '';
   String _playerId = '';
   int _unreadCount = 0;
@@ -36,6 +39,22 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
     _loadUser();
     _loadUnread();
     _subscribeUnread();
+    _registerFcmToken();
+  }
+
+  Future<void> _registerFcmToken() async {
+    try {
+      await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token == null) return;
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+      await Supabase.instance.client.from('device_tokens').upsert({
+        'user_id':  userId,
+        'token':    token,
+        'platform': Platform.isIOS ? 'ios' : 'android',
+      }, onConflict: 'user_id,token');
+    } catch (_) {}
   }
 
   @override
@@ -132,6 +151,22 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
                   },
                 ),
                 _ProfileMenuItem(
+                  icon: Icons.visibility_outlined,
+                  label: 'Who Viewed Me',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/player/profile-views');
+                  },
+                ),
+                _ProfileMenuItem(
+                  icon: Icons.videocam_rounded,
+                  label: 'My Film',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openFilmPage();
+                  },
+                ),
+                _ProfileMenuItem(
                   icon: Icons.settings_outlined,
                   label: 'Settings',
                   onTap: () {
@@ -189,27 +224,18 @@ class _PlayerDashboardPageState extends State<PlayerDashboardPage> {
             firstName: _firstName,
             playerId: _playerId,
           ),
-          const PlayerSearchPage(),
+          const PlayerRoadmapPage(),
+          const PlayerOpeningsPage(),
           const ConversationsPage(),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'player_film_fab',
-        backgroundColor: PlayerColors.accent,
-        foregroundColor: PlayerColors.textOnAccent,
-        elevation: 6,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        onPressed: _openFilmPage,
-        child: const Icon(Icons.videocam_rounded, size: 26),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: _PlayerBottomBar(
         currentIndex: _currentIndex,
         hasUnread: hasUnread,
         badgeLabel: badgeLabel,
         onTap: (i) {
           setState(() => _currentIndex = i);
-          if (i == 2) setState(() => _unreadCount = 0);
+          if (i == 3) setState(() => _unreadCount = 0);
         },
         onProfile: _showProfileMenu,
       ),
@@ -238,8 +264,6 @@ class _PlayerBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return BottomAppBar(
       color: PlayerColors.surface,
-      shape: const CircularNotchedRectangle(),
-      notchMargin: 6,
       elevation: 8,
       child: SizedBox(
         height: 56,
@@ -253,20 +277,26 @@ class _PlayerBottomBar extends StatelessWidget {
               onTap: () => onTap(0),
             ),
             _NavTile(
-              icon: Icons.search_outlined,
-              activeIcon: Icons.search_rounded,
-              label: 'Search',
+              icon: Icons.route_outlined,
+              activeIcon: Icons.route,
+              label: 'Roadmap',
               selected: currentIndex == 1,
               onTap: () => onTap(1),
             ),
-            const Spacer(), // notch space
+            _NavTile(
+              icon: Icons.sports_soccer_outlined,
+              activeIcon: Icons.sports_soccer_rounded,
+              label: 'Openings',
+              selected: currentIndex == 2,
+              onTap: () => onTap(2),
+            ),
             _NavTile(
               icon: Icons.chat_bubble_outline_rounded,
               activeIcon: Icons.chat_bubble_rounded,
               label: 'Messages',
-              selected: currentIndex == 2,
+              selected: currentIndex == 3,
               badge: hasUnread ? badgeLabel : null,
-              onTap: () => onTap(2),
+              onTap: () => onTap(3),
             ),
             _NavTile(
               icon: Icons.person_outline_rounded,
@@ -405,6 +435,7 @@ class _GenZHomeTabState extends State<_GenZHomeTab> {
   int _profileViewCount = 0;
   bool _hasBio = false;
   bool _hasClub = false;
+  List<_NudgeItem> _nudges = [];
   List<Map<String, dynamic>> _topMatches = [];
   List<_ActivityItem> _activityItems = [];
   bool _loading = true;
@@ -447,7 +478,8 @@ class _GenZHomeTabState extends State<_GenZHomeTab> {
     try {
       profile = await Supabase.instance.client
           .from('players')
-          .select('bio, club_name')
+          .select('bio, club_name, league, target_division, target_schools, '
+              'technical_skills, gpa, sat_score, highlight_url, height_cm')
           .eq('id', widget.playerId)
           .maybeSingle();
     } catch (_) {}
@@ -497,8 +529,8 @@ class _GenZHomeTabState extends State<_GenZHomeTab> {
           .gte('start_date', nowDate)
           .order('start_date', ascending: true)
           .limit(1);
-      if ((events as List).isNotEmpty) {
-        nextEvent = events[0] as Map<String, dynamic>;
+      if (events.isNotEmpty) {
+        nextEvent = events[0];
       }
     } catch (_) {}
 
@@ -536,9 +568,33 @@ class _GenZHomeTabState extends State<_GenZHomeTab> {
     }
 
     if (mounted) {
+      final nudges = <_NudgeItem>[];
+      if ((profile?['height_cm']) == null) {
+        nudges.add(const _NudgeItem(icon: Icons.height_rounded, title: 'Add your height', benefit: 'Coaches filter by position size', startPage: 4));
+      }
+      if ((profile?['club_name'] as String?)?.isEmpty ?? true) {
+        nudges.add(const _NudgeItem(icon: Icons.sports_soccer_rounded, title: 'Add your club', benefit: 'MLS Next & ECNL → priority with D1 coaches', startPage: 5));
+      }
+      if ((profile?['target_division']) == null) {
+        nudges.add(const _NudgeItem(icon: Icons.school_outlined, title: 'Set your target level', benefit: 'Get matched with the right programs', startPage: 6));
+      }
+      if ((profile?['target_schools'] as List?)?.isEmpty ?? true) {
+        nudges.add(const _NudgeItem(icon: Icons.bookmark_outline_rounded, title: 'Add target schools', benefit: 'Those coaches see you first', startPage: 7));
+      }
+      if ((profile?['technical_skills']) == null) {
+        nudges.add(const _NudgeItem(icon: Icons.auto_graph_rounded, title: 'Rate your skills', benefit: 'Personalizes your recruiting roadmap', startPage: 8));
+      }
+      if ((profile?['gpa']) == null && (profile?['sat_score']) == null) {
+        nudges.add(const _NudgeItem(icon: Icons.menu_book_outlined, title: 'Add academics', benefit: 'D3 & NAIA weigh grades heavily', startPage: 9));
+      }
+      if ((profile?['highlight_url'] as String?)?.isEmpty ?? true) {
+        nudges.add(const _NudgeItem(icon: Icons.videocam_outlined, title: 'Add a highlight reel', benefit: 'Film → 3× more coach contact', startPage: 10));
+      }
+
       setState(() {
         _hasBio = (profile?['bio'] as String?)?.isNotEmpty ?? false;
         _hasClub = (profile?['club_name'] as String?)?.isNotEmpty ?? false;
+        _nudges = nudges;
         _topMatches = topMatches;
         _matchCount = matchCount;
         _filmCount = filmCount;
@@ -606,7 +662,22 @@ class _GenZHomeTabState extends State<_GenZHomeTab> {
           score: _exposureScore,
           firstName: name,
           loading: _loading,
+          viewCount: _profileViewCount,
+          onViewsTap: () => context.push('/player/profile-views'),
         )),
+
+        // ── Profile nudges ─────────────────────────────────────────────────────
+        if (_nudges.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _ProfileNudges(
+              nudges: _nudges,
+              onTap: (page) async {
+                await context.push('/player/profile/setup',
+                    extra: {'startPage': page});
+                if (mounted) _loadData();
+              },
+            ),
+          ),
 
         // ── Coach cards ────────────────────────────────────────────────────────
         if (_topMatches.isNotEmpty) ...[
@@ -663,17 +734,150 @@ class _GenZHomeTabState extends State<_GenZHomeTab> {
   }
 }
 
+// ── Profile nudges ─────────────────────────────────────────────────────────────
+
+class _NudgeItem {
+  final IconData icon;
+  final String title;
+  final String benefit;
+  final int startPage;
+
+  const _NudgeItem({
+    required this.icon,
+    required this.title,
+    required this.benefit,
+    required this.startPage,
+  });
+}
+
+class _ProfileNudges extends StatelessWidget {
+  final List<_NudgeItem> nudges;
+  final void Function(int startPage) onTap;
+
+  const _ProfileNudges({required this.nudges, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+          child: Row(
+            children: [
+              Container(
+                width: 6, height: 6,
+                decoration: BoxDecoration(
+                  color: PlayerColors.accent,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Complete your profile',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: PlayerColors.textSecondary,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${nudges.length} left',
+                style: TextStyle(fontSize: 11, color: PlayerColors.textTertiary),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 86,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: nudges.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (_, i) => _NudgeCard(item: nudges[i], onTap: onTap),
+          ),
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+}
+
+class _NudgeCard extends StatelessWidget {
+  final _NudgeItem item;
+  final void Function(int) onTap;
+
+  const _NudgeCard({required this.item, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onTap(item.startPage),
+      child: Container(
+        width: 180,
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141414),
+          border: Border.all(color: PlayerColors.accent.withValues(alpha: 0.22), width: 1),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(item.icon, size: 15, color: PlayerColors.accent),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    item.title,
+                    style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              item.benefit,
+              style: TextStyle(
+                fontSize: 11, color: PlayerColors.textTertiary, height: 1.3),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              'Add now →',
+              style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700,
+                color: PlayerColors.accent.withValues(alpha: 0.8)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Exposure hero card ─────────────────────────────────────────────────────────
 
 class _ExposureHeroCard extends StatelessWidget {
   final int score;
   final String firstName;
   final bool loading;
+  final int viewCount;
+  final VoidCallback? onViewsTap;
 
   const _ExposureHeroCard({
     required this.score,
     required this.firstName,
     required this.loading,
+    this.viewCount = 0,
+    this.onViewsTap,
   });
 
   @override
@@ -725,6 +929,30 @@ class _ExposureHeroCard extends StatelessWidget {
                     height: 1.4,
                   ),
                 ),
+                if (!loading && viewCount > 0) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: onViewsTap,
+                    child: Row(
+                      children: [
+                        Icon(Icons.visibility_outlined, size: 12,
+                            color: PlayerColors.accent.withValues(alpha: 0.8)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$viewCount coach${viewCount == 1 ? '' : 'es'} viewed you',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: PlayerColors.accent.withValues(alpha: 0.8),
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        Icon(Icons.chevron_right_rounded, size: 13,
+                            color: PlayerColors.accent.withValues(alpha: 0.6)),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

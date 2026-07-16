@@ -18,6 +18,8 @@ import '../../features/education/presentation/widgets/article_detail_page.dart';
 import '../../features/education/data/education_articles.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/player/profile/presentation/pages/player_profile_views_page.dart';
+import '../../features/player/roadmap/presentation/pages/player_roadmap_page.dart';
+import '../../features/player/openings/presentation/pages/player_openings_page.dart';
 
 /// Notifier that listens to Supabase auth state changes and notifies GoRouter.
 class SupabaseAuthNotifier extends ChangeNotifier {
@@ -82,12 +84,24 @@ class AppRouter {
         builder: (context, state) => const PlayerProfileViewsPage(),
       ),
       GoRoute(
+        path: '/player/roadmap',
+        builder: (context, state) => const PlayerRoadmapPage(),
+      ),
+      GoRoute(
+        path: '/player/openings',
+        builder: (context, state) => const PlayerOpeningsPage(),
+      ),
+      GoRoute(
         path: '/player/profile',
         builder: (context, state) => const PlayerProfilePage(),
       ),
       GoRoute(
         path: '/player/profile/setup',
-        builder: (context, state) => const PlayerProfileSetupPage(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final startPage = extra?['startPage'] as int? ?? 0;
+          return PlayerProfileSetupPage(startPage: startPage);
+        },
       ),
 
       // ── Coach Routes ───────────────────────────────────────────────────────

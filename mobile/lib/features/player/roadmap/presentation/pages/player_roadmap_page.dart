@@ -78,9 +78,12 @@ class _PlayerRoadmapPageState extends State<PlayerRoadmapPage>
     final l10n = AppLocalizations.of(context);
 
     if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(
-          color: isDark ? PlayerColors.accent : AppColors.primary,
+      return SafeArea(
+        bottom: false,
+        child: Center(
+          child: CircularProgressIndicator(
+            color: isDark ? PlayerColors.accent : AppColors.primary,
+          ),
         ),
       );
     }
@@ -90,7 +93,9 @@ class _PlayerRoadmapPageState extends State<PlayerRoadmapPage>
         _steps.where((s) => s.status == StepStatus.completed).length;
     final progress = totalSteps > 0 ? completedSteps / totalSteps : 0.0;
 
-    return Column(
+    return SafeArea(
+      bottom: false,
+      child: Column(
       children: [
         // Header progress card
         _RoadmapHeaderCard(
@@ -186,6 +191,7 @@ class _PlayerRoadmapPageState extends State<PlayerRoadmapPage>
           ),
         ),
       ],
+      ),
     );
   }
 

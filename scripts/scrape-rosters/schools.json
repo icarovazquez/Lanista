@@ -1,6 +1,6 @@
 [
   {
-    "_note": "school_name MUST match exactly what is in the coaches table. Verify roster URLs in a browser before running — Sidearm URLs occasionally change paths.",
+    "_note": "school_name MUST match exactly what is in the coaches table. Verify roster URLs in a browser before running \u2014 Sidearm URLs occasionally change paths.",
     "school_name": "University of North Carolina",
     "roster_url": "https://goheels.com/sports/mens-soccer/roster",
     "gender": "men",
@@ -17,10 +17,26 @@
     "platform": "sidearm",
     "_note": "Staff directory doesn't expose coaches per-sport cleanly; using manual data verified July 2026.",
     "manual_staff": [
-      {"name": "Jeremy Gunn", "title": "Head Coach", "email": "smsoccer@stanford.edu"},
-      {"name": "Drew Hutchins", "title": "Associate Head Coach", "email": "smsoccer@stanford.edu"},
-      {"name": "Kevin McCarthy", "title": "Assistant Coach", "email": "smsoccer@stanford.edu"},
-      {"name": "Woo Jeon", "title": "Assistant Coach", "email": "smsoccer@stanford.edu"}
+      {
+        "name": "Jeremy Gunn",
+        "title": "Head Coach",
+        "email": "smsoccer@stanford.edu"
+      },
+      {
+        "name": "Drew Hutchins",
+        "title": "Associate Head Coach",
+        "email": "smsoccer@stanford.edu"
+      },
+      {
+        "name": "Kevin McCarthy",
+        "title": "Assistant Coach",
+        "email": "smsoccer@stanford.edu"
+      },
+      {
+        "name": "Woo Jeon",
+        "title": "Assistant Coach",
+        "email": "smsoccer@stanford.edu"
+      }
     ]
   },
   {
@@ -56,7 +72,11 @@
     "platform": "sidearm",
     "_note": "Staff directory lists Phil Jones (Associate HC) under msoccer@clemson.edu; HC not separately listed. Manual data verified July 2026.",
     "manual_staff": [
-      {"name": "Phil Jones", "title": "Associate Head Coach", "email": "msoccer@clemson.edu"}
+      {
+        "name": "Phil Jones",
+        "title": "Associate Head Coach",
+        "email": "msoccer@clemson.edu"
+      }
     ]
   },
   {
@@ -68,8 +88,16 @@
     "platform": "sidearm",
     "_note": "Staff directory lists Head Coach + Associate HC. Manual data verified July 2026.",
     "manual_staff": [
-      {"name": "George Gelnovatch", "title": "Head Coach", "email": "Vrp9as@virginia.edu"},
-      {"name": "Matt Chulis", "title": "Associate Head Coach", "email": "mrc5r@virginia.edu"}
+      {
+        "name": "George Gelnovatch",
+        "title": "Head Coach",
+        "email": "Vrp9as@virginia.edu"
+      },
+      {
+        "name": "Matt Chulis",
+        "title": "Associate Head Coach",
+        "email": "mrc5r@virginia.edu"
+      }
     ]
   },
   {
@@ -119,7 +147,7 @@
     "division": "D2",
     "state": "FL",
     "platform": "sidearm",
-    "_verify": "URL may differ — verify in browser."
+    "_verify": "URL may differ \u2014 verify in browser."
   },
   {
     "school_name": "Davis & Elkins College",
@@ -146,7 +174,7 @@
     "division": "D3",
     "state": "MA",
     "platform": "other",
-    "_verify": "D3 NESCAC — likely not Sidearm."
+    "_verify": "D3 NESCAC \u2014 likely not Sidearm."
   },
   {
     "school_name": "Middlebury College",
@@ -155,7 +183,7 @@
     "division": "D3",
     "state": "VT",
     "platform": "other",
-    "_verify": "D3 NESCAC — likely not Sidearm."
+    "_verify": "D3 NESCAC \u2014 likely not Sidearm."
   },
   {
     "school_name": "Tufts University",
@@ -182,5 +210,584 @@
     "state": "IL",
     "platform": "sidearm",
     "_note": "Athletic site is on athletics.ben.edu, not benueagles.com."
+  },
+  {
+    "school_name": "University of Maryland",
+    "roster_url": "https://umterps.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "MD",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Duke University",
+    "roster_url": "https://goduke.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "NC",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Notre Dame",
+    "roster_url": "https://fightingirish.com/sports/msoc/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "IN",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Ohio State University",
+    "roster_url": "https://ohiostatebuckeyes.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "OH",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Penn State University",
+    "roster_url": "https://gopsusports.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "PA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "UCLA",
+    "roster_url": "https://uclabruins.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "CA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "UC Santa Barbara",
+    "roster_url": "https://ucsbgauchos.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "CA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Akron",
+    "roster_url": "https://gozips.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "OH",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "UConn",
+    "roster_url": "https://uconnhuskies.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "CT",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Michigan",
+    "roster_url": "https://mgoblue.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "MI",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Michigan State University",
+    "roster_url": "https://msuspartans.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "MI",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Northwestern University",
+    "roster_url": "https://nusports.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "IL",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Wisconsin",
+    "roster_url": "https://uwbadgers.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "WI",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Virginia Tech",
+    "roster_url": "https://hokiesports.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "VA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "NC State University",
+    "roster_url": "https://gopack.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "NC",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Pittsburgh",
+    "roster_url": "https://pittsburghpanthers.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "PA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Boston College",
+    "roster_url": "https://bceagles.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "MA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Rutgers University",
+    "roster_url": "https://scarletknights.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "NJ",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "West Virginia University",
+    "roster_url": "https://wvusports.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "WV",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Creighton University",
+    "roster_url": "https://gocreighton.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "NE",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Portland",
+    "roster_url": "https://portlandpilots.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "OR",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Denver",
+    "roster_url": "https://denverpioneers.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "CO",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Gonzaga University",
+    "roster_url": "https://gozags.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "WA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "SMU",
+    "roster_url": "https://smumustangs.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "TX",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Kentucky",
+    "roster_url": "https://ukathletics.com/sports/msoc/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "KY",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of South Carolina",
+    "roster_url": "https://gamecocksonline.com/sports/msoc/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "SC",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Tulsa",
+    "roster_url": "https://tulsahurricane.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "OK",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Iowa",
+    "roster_url": "https://hawkeyesports.com/sports/msoc/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "IA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Florida State University",
+    "roster_url": "https://seminoles.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "FL",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Washington",
+    "roster_url": "https://gohuskies.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "WA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Oregon State University",
+    "roster_url": "https://osubeavers.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "OR",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "UC Davis",
+    "roster_url": "https://ucdavisaggies.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "CA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "San Jose State University",
+    "roster_url": "https://sjsuspartans.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "CA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "UNLV",
+    "roster_url": "https://unlvrebels.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "NV",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Xavier University",
+    "roster_url": "https://goxavier.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "OH",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Butler University",
+    "roster_url": "https://butlersports.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "IN",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Loyola University Chicago",
+    "roster_url": "https://loyolaramblers.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "IL",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Providence College",
+    "roster_url": "https://friars.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "RI",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of San Diego",
+    "roster_url": "https://usdtoreros.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "CA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Furman University",
+    "roster_url": "https://furmanpaladins.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "SC",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "James Madison University",
+    "roster_url": "https://jmusports.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "VA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Old Dominion University",
+    "roster_url": "https://odusports.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D1",
+    "state": "VA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Tampa",
+    "roster_url": "https://www.tampaspartans.com/sports/msoc/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "FL",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Florida Southern College",
+    "roster_url": "https://fscmocs.com/sports/msoc/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "FL",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Rollins College",
+    "roster_url": "https://rollinssports.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "FL",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Rockhurst University",
+    "roster_url": "https://rockhursthawks.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "MO",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Drury University",
+    "roster_url": "https://drurypanthers.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "MO",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Colorado School of Mines",
+    "roster_url": "https://minesathletics.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "CO",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Fort Hays State University",
+    "roster_url": "https://fhsuathletics.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "KS",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Adelphi University",
+    "roster_url": "https://aupanthers.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "NY",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Assumption University",
+    "roster_url": "https://assumptiongreyhounds.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "MA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Le Moyne College",
+    "roster_url": "https://lemoynedolphins.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "NY",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Indianapolis",
+    "roster_url": "https://athletics.uindy.edu/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "IN",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Ashland University",
+    "roster_url": "https://goashlandeagles.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "OH",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "West Texas A&M University",
+    "roster_url": "https://gobuffsgo.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "TX",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Bellarmine University",
+    "roster_url": "https://athletics.bellarmine.edu/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "KY",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Wingate University",
+    "roster_url": "https://wingatebulldogs.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "NC",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "University of Wisconsin-Parkside",
+    "roster_url": "https://parksiderangers.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "WI",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Saint Leo University",
+    "roster_url": "https://saintleolions.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "FL",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Mercy University",
+    "roster_url": "https://mercyathletics.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D2",
+    "state": "NY",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Trinity College",
+    "roster_url": "https://bantamsports.com/sports/msoc/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "CT",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Connecticut College",
+    "roster_url": "https://camelathletics.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "CT",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Dickinson College",
+    "roster_url": "https://dickinsonathletics.com/sports/msoc/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "PA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Bowdoin College",
+    "roster_url": "https://athletics.bowdoin.edu/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "ME",
+    "platform": "sidearm",
+    "_verify": true
+  },
+  {
+    "school_name": "Colby College",
+    "roster_url": "https://colbyathletics.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "ME",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Haverford College",
+    "roster_url": "https://haverfordathletics.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "PA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Wesleyan University",
+    "roster_url": "https://athletics.wesleyan.edu/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "CT",
+    "platform": "sidearm",
+    "_verify": true
+  },
+  {
+    "school_name": "Macalester College",
+    "roster_url": "https://athletics.macalester.edu/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "MN",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Carnegie Mellon University",
+    "roster_url": "https://athletics.cmu.edu/sports/msoc/2025-26/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "PA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Brandeis University",
+    "roster_url": "https://brandeisjudges.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "MA",
+    "platform": "sidearm"
+  },
+  {
+    "school_name": "Johns Hopkins University",
+    "roster_url": "https://hopkinssports.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "MD",
+    "platform": "sidearm",
+    "_verify": true
+  },
+  {
+    "school_name": "Emory University",
+    "roster_url": "https://emoryathletics.com/sports/mens-soccer/roster",
+    "gender": "men",
+    "division": "D3",
+    "state": "GA",
+    "platform": "sidearm"
   }
 ]

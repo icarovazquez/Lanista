@@ -2,15 +2,18 @@
 """
 Lanista Roster Scraper
 ======================
-Scrapes college soccer rosters from Sidearm Sports athletic websites and
-uploads the normalized data to the Lanista Supabase database.
+Scrapes college soccer rosters from Sidearm Sports athletic websites,
+uploads the normalized data to Lanista's Supabase database, and
+automatically calls preload_roster_from_scraped() to seed roster_slots
+for each coach — no manual SQL needed.
 
 Usage:
   python scraper.py                         # scrape all schools in schools.json
   python scraper.py --school "Stanford"     # scrape one school (substring match)
-  python scraper.py --season 2026           # specify season year (default: 2025)
+  python scraper.py --season 2026           # specify season year (default: 2026)
   python scraper.py --dry-run               # parse + print, don't write to DB
   python scraper.py --gender women          # women's soccer (when URLs configured)
+  python scraper.py --skip-preload          # skip roster_slots seeding step
 
 Setup:
   pip install -r requirements.txt
@@ -170,9 +173,31 @@ def log_scrape(coach_id: str, season_year: int, url: str, status: str,
     )
 
 
+def preload_roster_slots(coach_id: str, season_year: int) -> int:
+    """
+    Call the DB function preload_roster_from_scraped() via Supabase RPC.
+    Returns the number of roster_slots inserted, or -1 on error.
+    """
+    headers = _sb_headers()
+    headers["Prefer"] = "return=representation"
+    resp = httpx.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/preload_roster_from_scraped",
+        json={"p_coach_id": coach_id, "p_season_year": season_year},
+        headers=headers,
+        timeout=20,
+    )
+    if resp.status_code in (200, 201):
+        try:
+            return int(resp.json())
+        except (ValueError, TypeError):
+            return 0
+    print(f"  ⚠  preload_roster_from_scraped error {resp.status_code}: {resp.text[:200]}")
+    return -1
+
+
 # ── Core scrape logic ─────────────────────────────────────────────────────────
 
-def scrape_school(school: dict, season_year: int, dry_run: bool) -> dict:
+def scrape_school(school: dict, season_year: int, dry_run: bool, skip_preload: bool = False) -> dict:
     """
     Scrape one school, normalize, and optionally upload.
     Returns a result dict: {school, status, count}.
@@ -274,6 +299,13 @@ def scrape_school(school: dict, season_year: int, dry_run: bool) -> dict:
     if success:
         log_scrape(coach_id, season_year, url, "success", len(rows))
         print(f"  ✅ Uploaded {len(rows)} players")
+
+        if not skip_preload:
+            slots = preload_roster_slots(coach_id, season_year)
+            if slots >= 0:
+                print(f"  ✅ Seeded {slots} roster_slots")
+            # -1 means error — already printed by preload_roster_slots
+
         return {"school": name, "status": "success", "count": len(rows)}
     else:
         log_scrape(coach_id, season_year, url, "failed", 0, "insert error")
@@ -288,10 +320,12 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--school",  help="Scrape only schools whose name contains this string")
-    parser.add_argument("--season",  type=int, default=2025, help="Season year (default: 2025)")
-    parser.add_argument("--gender",  choices=["men", "women"], default="men")
-    parser.add_argument("--dry-run", action="store_true", help="Parse but don't write to DB")
+    parser.add_argument("--school",       help="Scrape only schools whose name contains this string")
+    parser.add_argument("--season",       type=int, default=2026, help="Season year (default: 2026)")
+    parser.add_argument("--gender",       choices=["men", "women"], default="men")
+    parser.add_argument("--dry-run",      action="store_true", help="Parse but don't write to DB")
+    parser.add_argument("--skip-preload", action="store_true",
+                        help="Upload scraped players but skip seeding roster_slots")
     args = parser.parse_args()
 
     # Validate env
@@ -314,7 +348,7 @@ def main() -> None:
 
     results = []
     for i, school in enumerate(schools):
-        result = scrape_school(school, args.season, args.dry_run)
+        result = scrape_school(school, args.season, args.dry_run, args.skip_preload)
         results.append(result)
         if i < len(schools) - 1:
             time.sleep(CRAWL_DELAY)  # polite delay
@@ -332,6 +366,8 @@ def main() -> None:
     if no_coach:
         print(f"  ⚠  No coach  : {len(no_coach)} schools")
     print(f"  👥 Total players: {total}")
+    if not args.dry_run and not args.skip_preload:
+        print("  🏟  roster_slots seeded for each successful school")
 
     if failed:
         print("\nFailed schools (check HTML structure manually):")

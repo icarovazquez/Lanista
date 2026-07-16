@@ -143,7 +143,7 @@ serve(async (req) => {
           graduation_year
         )
       `)
-      .eq('coach_position_requirements.is_published', true)
+      .eq('is_published', true)
 
     if (coachErr || !coaches || coaches.length === 0) {
       return new Response(

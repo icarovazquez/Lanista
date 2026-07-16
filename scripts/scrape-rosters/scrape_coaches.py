@@ -61,13 +61,11 @@ SKIP_KEYWORDS = [
 
 def is_coaching_staff(title: str) -> bool:
     t = title.lower()
+    # Coaching always wins — "Assistant Coach/Director of Operations" is still a coach
+    if any(k in t for k in COACHING_KEYWORDS) or "coach" in t:
+        return True
     if any(k in t for k in SKIP_KEYWORDS):
         return False
-    if any(k in t for k in COACHING_KEYWORDS):
-        return True
-    # Catch generic "coach" not already handled
-    if "coach" in t:
-        return True
     return False
 
 

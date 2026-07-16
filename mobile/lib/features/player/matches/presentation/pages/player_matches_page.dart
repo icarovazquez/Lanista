@@ -6,7 +6,6 @@ import '../../../../../../core/theme/player_colors.dart';
 import '../../../../../../core/theme/player_theme_data.dart';
 import '../../../../../../core/theme/player_theme_scope.dart';
 import '../../../../../../core/di/injection.dart';
-import '../../../../messaging/presentation/pages/conversation_detail_page.dart';
 
 /// Displays college program matches ranked by the Lanista matching engine.
 /// Each card shows the match score breakdown and key reasons.
@@ -19,6 +18,7 @@ class PlayerMatchesPage extends StatefulWidget {
 
 class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
   List<Map<String, dynamic>> _matches = [];
+  Set<String> _coachIdsWithOpenings = {};
   bool _isLoading = true;
   bool _isRunningEngine = false;
   // ignore: unused_field
@@ -39,7 +39,7 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
       // player_coach_matches.player_id references players.id (not users.id)
       final playerRecord = await Supabase.instance.client
           .from('players')
-          .select('id')
+          .select('id, primary_position, graduation_year')
           .eq('user_id', userId)
           .maybeSingle();
 
@@ -47,7 +47,9 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
-      final playerId = playerRecord['id'] as String;
+      final playerId        = playerRecord['id'] as String;
+      final playerPosition  = (playerRecord['primary_position'] as String?)?.toLowerCase() ?? '';
+      final playerGradYear  = playerRecord['graduation_year'] as int?;
 
       final data = await Supabase.instance.client
           .from('player_coach_matches')
@@ -66,6 +68,7 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
               school_name,
               division,
               primary_formation,
+              assistant_staff,
               users(first_name, last_name, email)
             )
           ''')
@@ -74,7 +77,37 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
           .limit(50);
 
       debugPrint('PlayerMatchesPage: loaded ${(data as List).length} matches');
-      if (mounted) setState(() => _matches = List<Map<String, dynamic>>.from(data));
+      final matches = List<Map<String, dynamic>>.from(data);
+
+      // Find coaches with roster openings at the player's position + graduation year
+      Set<String> openingCoachIds = {};
+      if (playerPosition.isNotEmpty && playerGradYear != null) {
+        try {
+          final coachIds = matches
+              .map((m) => (m['coaches'] as Map<String, dynamic>?)?['id'] as String?)
+              .whereType<String>()
+              .toList();
+          if (coachIds.isNotEmpty) {
+            final openings = await Supabase.instance.client
+                .from('roster_slots')
+                .select('coach_id')
+                .eq('needs_recruit', true)
+                .eq('graduation_year', playerGradYear)
+                .filter('position_key', 'ilike', playerPosition)
+                .inFilter('coach_id', coachIds);
+            openingCoachIds = (openings as List)
+                .map((r) => r['coach_id'] as String)
+                .toSet();
+          }
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        setState(() {
+          _matches = matches;
+          _coachIdsWithOpenings = openingCoachIds;
+        });
+      }
     } catch (e, st) {
       debugPrint('_loadMatches error: $e\n$st');
       if (mounted) setState(() => _errorMessage = e.toString());
@@ -174,10 +207,17 @@ class _PlayerMatchesPageState extends State<PlayerMatchesPage> {
             const SizedBox(height: 12),
             const _ScoreLegend(),
             const SizedBox(height: 16),
-            ..._matches.asMap().entries.map((entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _MatchCard(match: entry.value, rank: entry.key + 1),
-                )),
+            ..._matches.asMap().entries.map((entry) {
+              final coachId = (entry.value['coaches'] as Map<String, dynamic>?)?['id'] as String?;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _MatchCard(
+                  match: entry.value,
+                  rank: entry.key + 1,
+                  hasOpening: coachId != null && _coachIdsWithOpenings.contains(coachId),
+                ),
+              );
+            }),
           ],
         ),
       );
@@ -417,13 +457,32 @@ class _LegendItem extends StatelessWidget {
   }
 }
 
+// ─── Email helper ───────────────────────────────────────────────────────────────
+
+Future<void> _launchStaffEmail({
+  required BuildContext context,
+  required List<String> emails,
+  required String schoolName,
+}) async {
+  final subject = Uri.encodeComponent('Recruiting Inquiry — $schoolName');
+  final uri = Uri.parse('mailto:${emails.join(',')}?subject=$subject');
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
+  } else if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not open email app. Try: ${emails.first}')),
+    );
+  }
+}
+
 // ─── Match Card ─────────────────────────────────────────────────────────────────
 
 class _MatchCard extends StatelessWidget {
   final Map<String, dynamic> match;
   final int rank;
+  final bool hasOpening;
 
-  const _MatchCard({required this.match, required this.rank});
+  const _MatchCard({required this.match, required this.rank, this.hasOpening = false});
 
   @override
   Widget build(BuildContext context) {
@@ -436,6 +495,18 @@ class _MatchCard extends StatelessWidget {
     final formation = coach['primary_formation'] as String? ?? '';
     final coachName = '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim();
     final coachEmail = user['email'] as String? ?? '';
+    final assistantStaff = (coach['assistant_staff'] as List? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+
+    // Collect all unique emails — assistant_staff is the canonical source (includes HC + ACs)
+    final allEmails = assistantStaff
+        .map((s) => (s['email'] as String? ?? '').trim().toLowerCase())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
+    // Fallback to users.email if assistant_staff wasn't populated yet
+    if (allEmails.isEmpty && coachEmail.isNotEmpty) allEmails.add(coachEmail.toLowerCase());
     final totalScore    = ((match['total_score']    as num?) ?? 0).round();
     final tacticalScore = ((match['tactical_score'] as num?) ?? 0).round();
     final positionScore = ((match['position_score'] as num?) ?? 0).round();
@@ -538,6 +609,24 @@ class _MatchCard extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 8, fontWeight: FontWeight.w900,
                                   color: Color(0xFF0A0A0A), letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (hasOpening) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1A3A1A),
+                                border: Border.all(color: PlayerColors.accent, width: 1),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Text(
+                                'OPEN SPOT',
+                                style: TextStyle(
+                                  fontSize: 8, fontWeight: FontWeight.w900,
+                                  color: PlayerColors.accent, letterSpacing: 0.3,
                                 ),
                               ),
                             ),
@@ -710,7 +799,8 @@ class _MatchCard extends StatelessWidget {
                           division: division,
                           formation: formation,
                           coachName: coachName,
-                          coachEmail: coachEmail,
+                          allEmails: allEmails,
+                          assistantStaff: assistantStaff,
                           totalScore: totalScore,
                           tacticalScore: tacticalScore,
                           positionScore: positionScore,
@@ -736,24 +826,15 @@ class _MatchCard extends StatelessWidget {
                       foregroundColor: isDark ? PlayerColors.textOnAccent : Colors.white,
                     ),
                     icon: const Icon(Icons.email_outlined, size: 14),
-                    onPressed: coachEmail.isEmpty ? null : () async {
-                      final uri = Uri(
-                        scheme: 'mailto',
-                        path: coachEmail,
-                        queryParameters: {
-                          'subject': 'Recruiting Inquiry — ${schoolName}',
-                        },
-                      );
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri);
-                      } else if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('No email app found. Coach email: $coachEmail')),
-                        );
-                      }
-                    },
+                    onPressed: allEmails.isEmpty ? null : () => _launchStaffEmail(
+                      context: context,
+                      emails: allEmails,
+                      schoolName: schoolName,
+                    ),
                     label: Text(
-                      coachEmail.isEmpty ? 'No Email on File' : 'Email Coach',
+                      allEmails.isEmpty
+                          ? 'No Email on File'
+                          : 'Email Staff (${allEmails.length})',
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
@@ -774,7 +855,8 @@ class _ProgramDetailSheet extends StatelessWidget {
   final String division;
   final String formation;
   final String coachName;
-  final String coachEmail;
+  final List<String> allEmails;
+  final List<Map<String, dynamic>> assistantStaff;
   final int totalScore;
   final int tacticalScore;
   final int positionScore;
@@ -791,7 +873,8 @@ class _ProgramDetailSheet extends StatelessWidget {
     required this.division,
     required this.formation,
     required this.coachName,
-    required this.coachEmail,
+    required this.allEmails,
+    required this.assistantStaff,
     required this.totalScore,
     required this.tacticalScore,
     required this.positionScore,
@@ -1024,24 +1107,131 @@ class _ProgramDetailSheet extends StatelessWidget {
             ),
           ],
 
+          // Coaching Staff section
           const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isDark ? PlayerColors.accent : AppColors.primary,
-                foregroundColor: isDark ? PlayerColors.textOnAccent : Colors.white,
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          Row(
+            children: [
+              Icon(Icons.people_alt_outlined, size: 14,
+                  color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Text(
+                'Coaching Staff',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+                ),
               ),
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (assistantStaff.isEmpty)
+            Text(
+              coachName.isNotEmpty ? 'Coach $coachName' : 'Staff info loading…',
+              style: const TextStyle(fontSize: 13, color: PlayerColors.textSecondary),
+            )
+          else
+            ...assistantStaff.map((s) {
+              final name = s['name'] as String? ?? '';
+              final title = s['title'] as String? ?? '';
+              final email = (s['email'] as String? ?? '').trim();
+              // Skip entries where name is actually a role string (inverted-table schools)
+              final displayName = _looksLikeRoleString(name) ? null : name;
+              final displayTitle = _looksLikeRoleString(name) ? name : title;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(
+                        color: isDark ? PlayerColors.surfaceVariant : AppColors.surface,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.person_outline, size: 15,
+                          color: isDark ? PlayerColors.textSecondary : AppColors.textSecondary),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (displayName != null)
+                            Text(displayName,
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                                  color: isDark ? PlayerColors.textPrimary : AppColors.textPrimary)),
+                          if (displayTitle.isNotEmpty)
+                            Text(_shortenTitle(displayTitle),
+                              style: const TextStyle(fontSize: 11, color: PlayerColors.textSecondary)),
+                          Text(email,
+                            style: const TextStyle(fontSize: 11, color: PlayerColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    side: BorderSide(color: isDark ? PlayerColors.border : AppColors.border),
+                    foregroundColor: isDark ? PlayerColors.textPrimary : AppColors.textPrimary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ),
+              if (allEmails.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: Builder(builder: (ctx) => ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDark ? PlayerColors.accent : AppColors.primary,
+                      foregroundColor: isDark ? PlayerColors.textOnAccent : Colors.white,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.email_outlined, size: 16),
+                    onPressed: () => _launchStaffEmail(
+                      context: ctx,
+                      emails: allEmails,
+                      schoolName: schoolName,
+                    ),
+                    label: Text(
+                      'Email All Staff (${allEmails.length})',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  )),
+                ),
+              ],
+            ],
           ),
         ],
       ),
     );
   }
+}
+
+bool _looksLikeRoleString(String s) {
+  final lower = s.toLowerCase();
+  return lower.startsWith('head ') || lower.startsWith('assistant ') ||
+      lower.startsWith('associate ') || lower.startsWith('graduate ') ||
+      lower.startsWith('director ');
+}
+
+// Keep titles readable — truncate verbose titles like "Associate Head Coach/Director of..."
+String _shortenTitle(String title) {
+  final slash = title.indexOf('/');
+  if (slash > 0 && title.length > 40) return title.substring(0, slash).trim();
+  return title.length > 48 ? '${title.substring(0, 45)}…' : title;
 }
 
 // ─── Score Breakdown Bar ────────────────────────────────────────────────────────
