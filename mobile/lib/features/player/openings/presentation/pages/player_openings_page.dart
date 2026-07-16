@@ -15,6 +15,7 @@ class _PlayerOpeningsPageState extends State<PlayerOpeningsPage> {
   List<_Opening> _openings = [];
   bool _hasFilm = false;
   String _playerId = '';
+  Set<String> _savedCoachIds = {};
 
   @override
   void initState() {
@@ -83,7 +84,7 @@ class _PlayerOpeningsPageState extends State<PlayerOpeningsPage> {
         return;
       }
 
-      // 3. Match records for this player (to get scores)
+      // 3. Match records + saved state for this player
       final coachIds = (slotsRaw as List)
           .map((s) => s['coach_id'] as String)
           .toSet()
@@ -91,13 +92,22 @@ class _PlayerOpeningsPageState extends State<PlayerOpeningsPage> {
 
       final matchesRaw = await db
           .from('player_coach_matches')
-          .select('coach_id, total_score, film_score, match_reasons, match_gaps')
+          .select('coach_id, total_score, tactical_score, position_score, '
+              'physical_score, academic_score, timeline_score, film_score, '
+              'match_reasons, match_gaps')
           .eq('player_id', playerId)
           .inFilter('coach_id', coachIds);
 
       final matchMap = <String, Map<String, dynamic>>{
         for (final m in matchesRaw as List) m['coach_id'] as String: m,
       };
+
+      final savedRaw = await db
+          .from('player_saved_coaches')
+          .select('coach_id')
+          .eq('player_id', playerId);
+
+      final savedIds = {for (final s in savedRaw as List) s['coach_id'] as String};
 
       // 4. Build opening objects
       final openings = <_Opening>[];
@@ -108,26 +118,35 @@ class _PlayerOpeningsPageState extends State<PlayerOpeningsPage> {
         final match    = matchMap[coachId];
         final isPrimary = primaryKeys.contains(posKey.toLowerCase());
 
-        double baseScore = 0;
-        double filmScore = 0;
+        double baseScore     = 0;
+        double tacticalScore = 0;
+        double positionScore = 0;
+        double physicalScore = 0;
+        double academicScore = 0;
+        double timelineScore = 0;
+        double filmScore     = 0;
         List<String> reasons = [];
         List<String> gaps    = [];
         if (match != null) {
-          baseScore = (match['total_score'] as num?)?.toDouble() ?? 0;
-          filmScore = (match['film_score'] as num?)?.toDouble() ?? 0;
+          baseScore     = (match['total_score']    as num?)?.toDouble() ?? 0;
+          tacticalScore = (match['tactical_score'] as num?)?.toDouble() ?? 0;
+          positionScore = (match['position_score'] as num?)?.toDouble() ?? 0;
+          physicalScore = (match['physical_score'] as num?)?.toDouble() ?? 0;
+          academicScore = (match['academic_score'] as num?)?.toDouble() ?? 0;
+          timelineScore = (match['timeline_score'] as num?)?.toDouble() ?? 0;
+          filmScore     = (match['film_score']     as num?)?.toDouble() ?? 0;
           reasons = _parseStringList(match['match_reasons']);
           gaps    = _parseStringList(match['match_gaps']);
         }
 
-        // Apply film boost to display score if analysis exists
+        // total_score from the engine already includes film_score.
+        // Only apply the display-layer boost when the engine hasn't computed it yet.
         double displayScore = baseScore;
         if (analysisResult != null && filmScore == 0) {
           final rating = (analysisResult['scout_rating'] as num?)?.toDouble() ?? 5;
           final projection = analysisResult['college_level_projection'] as String? ?? '';
           final division = coach['division'] as String? ?? '';
           displayScore = _applyFilmBoost(baseScore, rating, projection, division);
-        } else {
-          displayScore = baseScore + filmScore;
         }
         displayScore = displayScore.clamp(0, 100);
 
@@ -144,6 +163,13 @@ class _PlayerOpeningsPageState extends State<PlayerOpeningsPage> {
           isPrimary:      isPrimary,
           hasMatchRecord: match != null,
           displayScore:   displayScore,
+          tacticalScore:  tacticalScore,
+          positionScore:  positionScore,
+          physicalScore:  physicalScore,
+          academicScore:  academicScore,
+          timelineScore:  timelineScore,
+          filmScore:      filmScore,
+          isSaved:        savedIds.contains(coachId),
           matchReasons:   reasons,
           matchGaps:      gaps,
         ));
@@ -156,7 +182,12 @@ class _PlayerOpeningsPageState extends State<PlayerOpeningsPage> {
         return b.displayScore.compareTo(a.displayScore);
       });
 
-      setState(() { _openings = openings; _loading = false; _playerId = playerId; });
+      setState(() {
+        _openings = openings;
+        _savedCoachIds = savedIds;
+        _loading = false;
+        _playerId = playerId;
+      });
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
     }
@@ -217,7 +248,8 @@ class _PlayerOpeningsPageState extends State<PlayerOpeningsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Header(openingCount: _openings.length, hasFilm: _hasFilm),
+          _Header(openingCount: _openings.length, hasFilm: _hasFilm,
+              savedCount: _savedCoachIds.length),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: PlayerColors.accent))
@@ -242,7 +274,18 @@ class _PlayerOpeningsPageState extends State<PlayerOpeningsPage> {
                                       _SectionLabel('Primary position matches'),
                                     if (showSecondaryLabel)
                                       _SectionLabel('Secondary position matches'),
-                                    _OpeningCard(opening: o, hasFilm: _hasFilm, playerId: _playerId),
+                                    _OpeningCard(
+                                      opening: o,
+                                      hasFilm: _hasFilm,
+                                      playerId: _playerId,
+                                      onSaveToggled: (coachId, saved) => setState(() {
+                                        if (saved) {
+                                          _savedCoachIds.add(coachId);
+                                        } else {
+                                          _savedCoachIds.remove(coachId);
+                                        }
+                                      }),
+                                    ),
                                   ],
                                 );
                               },
@@ -260,7 +303,8 @@ class _PlayerOpeningsPageState extends State<PlayerOpeningsPage> {
 class _Header extends StatelessWidget {
   final int openingCount;
   final bool hasFilm;
-  const _Header({required this.openingCount, required this.hasFilm});
+  final int savedCount;
+  const _Header({required this.openingCount, required this.hasFilm, required this.savedCount});
 
   @override
   Widget build(BuildContext context) {
@@ -274,6 +318,29 @@ class _Header extends StatelessWidget {
               const Text('Roster Openings',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white)),
               const Spacer(),
+              // My Schools bookmark button
+              GestureDetector(
+                onTap: () => Navigator.pushNamed(context, '/player/my-schools'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(savedCount > 0 ? Icons.bookmark : Icons.bookmark_border,
+                        size: 15, color: savedCount > 0 ? PlayerColors.accent : PlayerColors.textSecondary),
+                    if (savedCount > 0) ...[
+                      const SizedBox(width: 4),
+                      Text('$savedCount',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                            color: PlayerColors.accent)),
+                    ],
+                  ]),
+                ),
+              ),
+              const SizedBox(width: 8),
               if (openingCount > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -325,7 +392,13 @@ class _OpeningCard extends StatelessWidget {
   final _Opening opening;
   final bool hasFilm;
   final String playerId;
-  const _OpeningCard({required this.opening, required this.hasFilm, required this.playerId});
+  final void Function(String coachId, bool saved) onSaveToggled;
+  const _OpeningCard({
+    required this.opening,
+    required this.hasFilm,
+    required this.playerId,
+    required this.onSaveToggled,
+  });
 
   Color get _scoreColor {
     if (!opening.hasMatchRecord) return PlayerColors.textTertiary;
@@ -381,7 +454,8 @@ class _OpeningCard extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       isScrollControlled: true,
-      builder: (_) => _OpeningDetailSheet(opening: opening, playerId: playerId),
+      builder: (_) => _OpeningDetailSheet(
+        opening: opening, playerId: playerId, onSaveToggled: onSaveToggled),
     );
   }
 
@@ -446,6 +520,12 @@ class _OpeningCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                       ),
+                      if (opening.isSaved)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Icon(Icons.bookmark,
+                              size: 13, color: PlayerColors.accent),
+                        ),
                       _Chip(opening.division,
                           color: _divisionColor(opening.division)),
                     ],
@@ -577,10 +657,65 @@ class _Chip extends StatelessWidget {
 
 // ── Opening detail sheet ──────────────────────────────────────────────────────
 
-class _OpeningDetailSheet extends StatelessWidget {
+class _OpeningDetailSheet extends StatefulWidget {
   final _Opening opening;
   final String playerId;
-  const _OpeningDetailSheet({required this.opening, required this.playerId});
+  final void Function(String coachId, bool saved) onSaveToggled;
+  const _OpeningDetailSheet({
+    required this.opening,
+    required this.playerId,
+    required this.onSaveToggled,
+  });
+
+  @override
+  State<_OpeningDetailSheet> createState() => _OpeningDetailSheetState();
+}
+
+class _OpeningDetailSheetState extends State<_OpeningDetailSheet> {
+  late bool _saved;
+  bool _savingInProgress = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _saved = widget.opening.isSaved;
+  }
+
+  Future<void> _toggleSave() async {
+    if (_savingInProgress) return;
+    setState(() { _savingInProgress = true; });
+    try {
+      final db = Supabase.instance.client;
+      if (_saved) {
+        await db.from('player_saved_coaches')
+            .delete()
+            .eq('player_id', widget.playerId)
+            .eq('coach_id', widget.opening.coachId);
+      } else {
+        await db.from('player_saved_coaches')
+            .insert({'player_id': widget.playerId, 'coach_id': widget.opening.coachId});
+      }
+      setState(() { _saved = !_saved; });
+      widget.onSaveToggled(widget.opening.coachId, _saved);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save: $e')));
+      }
+    } finally {
+      if (mounted) setState(() { _savingInProgress = false; });
+    }
+  }
+
+  void _showBreakdown(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: PlayerColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _ScoreBreakdownSheet(opening: widget.opening),
+    );
+  }
 
   Future<void> _messageCoach(BuildContext context) async {
     Navigator.pop(context);
@@ -589,12 +724,11 @@ class _OpeningDetailSheet extends StatelessWidget {
       final userId = db.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Find or create conversation with this coach
       final existing = await db
           .from('conversations')
           .select('id')
-          .eq('player_id', playerId)
-          .eq('coach_id', opening.coachId)
+          .eq('player_id', widget.playerId)
+          .eq('coach_id', widget.opening.coachId)
           .maybeSingle();
 
       String convId;
@@ -603,7 +737,7 @@ class _OpeningDetailSheet extends StatelessWidget {
       } else {
         final created = await db
             .from('conversations')
-            .insert({'player_id': playerId, 'coach_id': opening.coachId})
+            .insert({'player_id': widget.playerId, 'coach_id': widget.opening.coachId, 'initiated_by': userId})
             .select('id')
             .single();
         convId = created['id'] as String;
@@ -622,6 +756,7 @@ class _OpeningDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final opening = widget.opening;
     final divColor = _divisionColor(opening.division);
     return Padding(
       padding: EdgeInsets.only(
@@ -647,6 +782,33 @@ class _OpeningDetailSheet extends StatelessWidget {
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900,
                       color: Colors.white)),
               ),
+              // Save / unsave button
+              GestureDetector(
+                onTap: _toggleSave,
+                child: Container(
+                  margin: const EdgeInsets.only(left: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _saved
+                        ? PlayerColors.accent.withValues(alpha: 0.15)
+                        : Colors.white.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _saved
+                          ? PlayerColors.accent.withValues(alpha: 0.5)
+                          : Colors.white.withValues(alpha: 0.12)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(_saved ? Icons.bookmark : Icons.bookmark_border,
+                        size: 14, color: _saved ? PlayerColors.accent : PlayerColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Text(_saved ? 'Saved' : 'Save',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                          color: _saved ? PlayerColors.accent : PlayerColors.textSecondary)),
+                  ]),
+                ),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
@@ -675,11 +837,11 @@ class _OpeningDetailSheet extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(10)),
-              child: Text('Match score not yet calculated — run the matching engine from the Matches tab',
+              child: Text('Match score not yet calculated.',
                 style: TextStyle(fontSize: 13, color: PlayerColors.textSecondary)),
             )
           else ...[
-            // Score + label
+            // Score + label + breakdown "?" button
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
@@ -690,9 +852,27 @@ class _OpeningDetailSheet extends StatelessWidget {
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
                       color: _scoreChipColor(opening.displayScore))),
                 const SizedBox(width: 10),
-                Text(_fitLabel(opening.displayScore),
+                Expanded(child: Text(_fitLabel(opening.displayScore),
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
-                      color: _scoreChipColor(opening.displayScore))),
+                      color: _scoreChipColor(opening.displayScore)))),
+                // Score breakdown button
+                GestureDetector(
+                  onTap: () => _showBreakdown(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.bar_chart_rounded, size: 12, color: PlayerColors.textSecondary),
+                      const SizedBox(width: 4),
+                      Text('How?', style: TextStyle(fontSize: 11,
+                          color: PlayerColors.textSecondary, fontWeight: FontWeight.w600)),
+                    ]),
+                  ),
+                ),
               ]),
             ),
             if (opening.matchReasons.isNotEmpty) ...[
@@ -730,7 +910,27 @@ class _OpeningDetailSheet extends StatelessWidget {
               )),
             ],
           ],
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _toggleSave,
+                icon: Icon(_saved ? Icons.bookmark : Icons.bookmark_border, size: 16),
+                label: Text(_saved ? 'Saved to My Schools' : 'Save to My Schools'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _saved ? PlayerColors.accent : PlayerColors.textSecondary,
+                  side: BorderSide(
+                    color: _saved
+                        ? PlayerColors.accent.withValues(alpha: 0.5)
+                        : Colors.white.withValues(alpha: 0.15)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -848,6 +1048,13 @@ class _Opening {
   final bool isPrimary;
   final bool hasMatchRecord;
   final double displayScore;
+  final double tacticalScore;
+  final double positionScore;
+  final double physicalScore;
+  final double academicScore;
+  final double timelineScore;
+  final double filmScore;
+  final bool isSaved;
   final List<String> matchReasons;
   final List<String> matchGaps;
 
@@ -864,7 +1071,111 @@ class _Opening {
     required this.isPrimary,
     required this.hasMatchRecord,
     required this.displayScore,
+    required this.tacticalScore,
+    required this.positionScore,
+    required this.physicalScore,
+    required this.academicScore,
+    required this.timelineScore,
+    required this.filmScore,
+    required this.isSaved,
     required this.matchReasons,
     required this.matchGaps,
   });
+}
+
+// ── Score breakdown sheet ─────────────────────────────────────────────────────
+
+class _ScoreBreakdownSheet extends StatelessWidget {
+  final _Opening opening;
+  const _ScoreBreakdownSheet({required this.opening});
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = [
+      _ScoreCat('Tactical fit',   opening.tacticalScore, 35, const Color(0xFF4A9D6F),
+          'Formation & position overlap'),
+      _ScoreCat('Position need',  opening.positionScore, 25, const Color(0xFF3A7ACD),
+          'Open roster slot + priority'),
+      _ScoreCat('Physical',       opening.physicalScore, 20, const Color(0xFF8B6CD8),
+          'Height, speed, foot, build'),
+      _ScoreCat('Academic',       opening.academicScore, 15, const Color(0xFFE8A838),
+          'GPA & test scores'),
+      _ScoreCat('Timeline',       opening.timelineScore, 5,  Colors.white54,
+          'Graduation year alignment'),
+      if (opening.filmScore > 0)
+        _ScoreCat('Film',         opening.filmScore,     15, PlayerColors.accent,
+            'Scout rating + level projection'),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(child: Container(
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 20),
+          const Text('How your score is calculated',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
+          const SizedBox(height: 4),
+          Text('Each category contributes points. Film is a bonus on top.',
+            style: TextStyle(fontSize: 13, color: PlayerColors.textSecondary)),
+          const SizedBox(height: 20),
+          ...categories.map((cat) => Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text(cat.label,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                      color: Colors.white))),
+                Text('${cat.score.round()} / ${cat.max}',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                      color: cat.color)),
+              ]),
+              const SizedBox(height: 4),
+              Text(cat.description,
+                style: TextStyle(fontSize: 11, color: PlayerColors.textTertiary)),
+              const SizedBox(height: 5),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: cat.max > 0 ? (cat.score / cat.max).clamp(0.0, 1.0) : 0,
+                  minHeight: 6,
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  valueColor: AlwaysStoppedAnimation(cat.color),
+                ),
+              ),
+            ]),
+          )),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(10)),
+            child: Row(children: [
+              Icon(Icons.info_outline, size: 14, color: PlayerColors.textTertiary),
+              const SizedBox(width: 8),
+              Expanded(child: Text(
+                'Upload highlight film to add up to 15 bonus points to every school\'s score.',
+                style: TextStyle(fontSize: 12, color: PlayerColors.textSecondary, height: 1.4))),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScoreCat {
+  final String label;
+  final double score;
+  final int max;
+  final Color color;
+  final String description;
+  const _ScoreCat(this.label, this.score, this.max, this.color, this.description);
 }

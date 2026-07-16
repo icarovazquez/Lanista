@@ -20,6 +20,7 @@ import '../../features/notifications/presentation/pages/notifications_page.dart'
 import '../../features/player/profile/presentation/pages/player_profile_views_page.dart';
 import '../../features/player/roadmap/presentation/pages/player_roadmap_page.dart';
 import '../../features/player/openings/presentation/pages/player_openings_page.dart';
+import '../../features/player/schools/presentation/pages/player_my_schools_page.dart';
 
 /// Notifier that listens to Supabase auth state changes and notifies GoRouter.
 class SupabaseAuthNotifier extends ChangeNotifier {
@@ -90,6 +91,10 @@ class AppRouter {
       GoRoute(
         path: '/player/openings',
         builder: (context, state) => const PlayerOpeningsPage(),
+      ),
+      GoRoute(
+        path: '/player/my-schools',
+        builder: (context, state) => const PlayerMySchoolsPage(),
       ),
       GoRoute(
         path: '/player/profile',
